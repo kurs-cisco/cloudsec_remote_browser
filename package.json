@@ -1,0 +1,27 @@
+{
+  "name": "cloudsec_remote_browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "SWG-integrated remote browser runtime extracted from browser_isolation.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "npm run test:all",
+    "test:all": "npm run test:unit && npm run test:go",
+    "test:node": "npm run test:unit",
+    "test:unit": "node --test test/*.test.js",
+    "test:redis": "node --test test/redis-key-prefix.test.js test/redis-integration.test.js",
+    "test:warm-pool": "node --test test/worker-pool-store.test.js",
+    "test:go": "cd services && GOCACHE=${GOCACHE:-/tmp/cloudsec-remote-browser-go-build} CGO_ENABLED=${CGO_ENABLED:-0} go test ./...",
+    "test:ci": "npm run test:unit && npm run test:go && npm run test:redis && npm run test:warm-pool && npm run verify:k8s",
+    "verify:k8s": "deploy/eks/scripts/validate-wave3-kata-eks.sh offline",
+    "proof:windows-rdp": "scripts/rbi-windows-rdp-visual-proof.sh"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ecs": "^3.1012.0",
+    "redis": "^5.11.0",
+    "ws": "^8.18.0"
+  }
+}

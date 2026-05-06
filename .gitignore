@@ -1,0 +1,32 @@
+node_modules/
+.env
+*.env
+!.env.example
+.DS_Store
+coverage/
+*.log
+tmp/
+.cache/
+.tmp/
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Local Terraform/Packer outputs and deployment artifacts.
+.terraform/
+.terraform-local/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+*.pkrvars.hcl
+*artifacts.env
+infra/terraform/aws-standalone-rbi/images/artifacts/Dockerfile.*
+infra/terraform/aws-standalone-rbi/images/artifacts/*-packer-manifest.json
+deploy/eks/rendered/
+
+# Local proof/debug inputs that should not ship in the product repo.
+docs/kurs-rbi-test.pac
+scripts/kurs-rbi-e2e-regression.sh

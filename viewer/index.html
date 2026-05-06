@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cisco Secure Browsers</title>
+    <link rel="stylesheet" href="/viewer.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar" aria-label="Cisco Secure Browser watermark controls">
+        <div class="watermark-cluster">
+          <div class="page-nav" aria-label="Page navigation">
+            <button id="navBack" class="nav-button" type="button" aria-label="Back" title="Back">
+              ‹
+            </button>
+            <button id="navForward" class="nav-button" type="button" aria-label="Forward" title="Forward">
+              ›
+            </button>
+            <button id="navReload" class="nav-button" type="button" aria-label="Reload" title="Reload">
+              ↻
+            </button>
+          </div>
+          <div class="url-watermark">
+            <button
+              id="urlReveal"
+              class="url-reveal"
+              type="button"
+              aria-label="Show isolated page URL"
+              aria-describedby="origin"
+              title="Connecting"
+            >
+              <span class="url-link-icon" aria-hidden="true"></span>
+            </button>
+            <span id="origin" class="url-tooltip" role="tooltip">Connecting</span>
+          </div>
+          <span id="status" class="status status-connecting">Connecting</span>
+          <span id="protectedMark" class="protected-mark" aria-label="Protected by Cisco Secure Browser">
+            <span class="protected-glyph" aria-hidden="true"></span>
+            <span class="protected-prefix">Protected by</span>
+            <strong>Cisco Secure Browser</strong>
+          </span>
+        </div>
+      </header>
+
+      <section class="enterprise-banner" aria-label="Enterprise isolation session details" aria-hidden="true">
+        <div class="banner-item">
+          <span class="banner-label">Tenant</span>
+          <strong id="bannerTenant">Enterprise tenant</strong>
+        </div>
+        <div class="banner-item">
+          <span class="banner-label">Target</span>
+          <strong id="bannerTarget">Resolving target</strong>
+        </div>
+        <div class="banner-item">
+          <span class="banner-label">Mode</span>
+          <strong id="bannerMode">Cisco Secure Browsers</strong>
+        </div>
+        <div class="banner-item">
+          <span class="banner-label">Policy</span>
+          <strong id="bannerPolicy">Enterprise policy</strong>
+        </div>
+        <div class="banner-item">
+          <span class="banner-label">Data</span>
+          <strong id="bannerControls">Policy governed</strong>
+        </div>
+        <div class="banner-item">
+          <span class="banner-label">Connection</span>
+          <strong id="bannerConnection">Connecting</strong>
+        </div>
+        <div class="banner-item">
+          <span class="banner-label">Region</span>
+          <strong id="bannerRegion">Selecting region</strong>
+        </div>
+        <div class="banner-item">
+          <span class="banner-label">Session</span>
+          <strong id="bannerSession">Pending</strong>
+        </div>
+        <div class="banner-item banner-action-item">
+          <span class="banner-label">Support</span>
+          <button id="reportProblem" class="banner-action" type="button">Report issue</button>
+        </div>
+      </section>
+
+      <section class="progress-strip" aria-label="Session progress">
+        <span id="stageText" class="stage-text">Loading session</span>
+        <ol id="stageList" class="stage-list">
+          <li data-stage="loading">Validate</li>
+          <li data-stage="allocating">Provision</li>
+          <li data-stage="worker-ready">Worker</li>
+          <li data-stage="media">Media</li>
+          <li data-stage="first-frame">First frame</li>
+          <li data-stage="live">Live</li>
+        </ol>
+      </section>
+
+      <section class="viewer-frame">
+        <video
+          id="remoteVideo"
+          autoplay
+          playsinline
+          webkit-playsinline
+          muted
+          disablepictureinpicture
+          disableremoteplayback
+          controlslist="nodownload nofullscreen noremoteplayback"
+        ></video>
+        <div id="overlay" class="overlay">
+          <div class="overlay-card">
+            <p id="overlayText">Opening isolated page</p>
+            <button id="overlayAction" class="button-secondary hidden" type="button">
+              Start fresh session
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/viewer.js?v=20260506-watermark-rbi-e"></script>
+  </body>
+</html>
