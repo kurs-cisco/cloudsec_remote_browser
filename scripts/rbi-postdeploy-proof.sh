@@ -307,6 +307,8 @@ check_privatelink() {
 
   if [[ -n "${target_group_arn}" && "${target_group_arn}" != "null" ]]; then
     target_states="$(aws elbv2 describe-target-health --target-group-arn "${target_group_arn}" --query 'TargetHealthDescriptions[].TargetHealth.State' --output text 2>/dev/null || true)"
+    target_states="${target_states//$'\t'/ }"
+    target_states="${target_states//$'\n'/ }"
     if [[ -z "${target_states}" ]]; then
       warn "PrivateLink bootstrap target group has no registered targets yet: ${target_group_arn}"
     elif [[ " ${target_states} " == *" healthy "* ]]; then
