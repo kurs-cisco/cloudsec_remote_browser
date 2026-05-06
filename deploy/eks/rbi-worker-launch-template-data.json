@@ -1,0 +1,63 @@
+{
+  "LaunchTemplateName": "__RBI_LAUNCH_TEMPLATE_NAME__",
+  "VersionDescription": "__RBI_LAUNCH_TEMPLATE_VERSION_DESCRIPTION__",
+  "LaunchTemplateData": {
+    "ImageId": "__RBI_AMI_ID__",
+    "InstanceType": "__RBI_INSTANCE_TYPE__",
+    "SecurityGroupIds": __RBI_SECURITY_GROUP_IDS_JSON__,
+    "UserData": "__RBI_USER_DATA_BASE64__",
+    "MetadataOptions": {
+      "HttpEndpoint": "enabled",
+      "HttpPutResponseHopLimit": 2,
+      "HttpTokens": "required"
+    },
+    "Monitoring": {
+      "Enabled": true
+    },
+    "BlockDeviceMappings": [
+      {
+        "DeviceName": "/dev/xvda",
+        "Ebs": {
+          "DeleteOnTermination": true,
+          "Encrypted": true,
+          "VolumeType": "gp3",
+          "VolumeSize": __RBI_ROOT_VOLUME_SIZE_GIB__,
+          "Iops": __RBI_ROOT_VOLUME_IOPS__,
+          "Throughput": __RBI_ROOT_VOLUME_THROUGHPUT__
+        }
+      }
+    ],
+    "TagSpecifications": [
+      {
+        "ResourceType": "instance",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "__RBI_LAUNCH_TEMPLATE_NAME__"
+          },
+          {
+            "Key": "cloudsec.cisco.com/rbi-plane",
+            "Value": "worker"
+          },
+          {
+            "Key": "cloudsec.cisco.com/cluster",
+            "Value": "__EKS_CLUSTER_NAME__"
+          }
+        ]
+      },
+      {
+        "ResourceType": "volume",
+        "Tags": [
+          {
+            "Key": "cloudsec.cisco.com/rbi-plane",
+            "Value": "worker"
+          },
+          {
+            "Key": "cloudsec.cisco.com/cluster",
+            "Value": "__EKS_CLUSTER_NAME__"
+          }
+        ]
+      }
+    ]
+  }
+}

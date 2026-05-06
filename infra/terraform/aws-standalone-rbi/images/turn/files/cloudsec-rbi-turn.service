@@ -1,0 +1,15 @@
+[Unit]
+Description=CloudSec RBI coturn runtime
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/cloudsec-rbi/turn.env
+ExecStart=/opt/cloudsec/turn/start-coturn.sh
+Restart=always
+RestartSec=10
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

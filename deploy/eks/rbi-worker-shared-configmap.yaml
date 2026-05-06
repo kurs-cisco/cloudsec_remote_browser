@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rbi-worker-shared-config
+  namespace: cloudsec-rbi-workers
+  labels:
+    app.kubernetes.io/name: cloudsec-remote-browser
+    app.kubernetes.io/component: rbi-worker-config
+    cloudsec.cisco.com/rbi-plane: worker
+data:
+  POOL_WS_URL: ws://runtime.cloudsec-rbi-control.svc.cluster.local:8080/ws/pool
+  POOL_WS_CONNECT_HOST: ""
+  SIGNALING_URL: ws://runtime.cloudsec-rbi-control.svc.cluster.local:8080/ws/worker
+  SIGNALING_CONNECT_HOST: ""
+  WORKER_ICE_URLS: turn:turn.cloudsec-rbi-media.svc.cluster.local:3478?transport=udp,turn:turn.cloudsec-rbi-media.svc.cluster.local:3478?transport=tcp
+  WORKER_REGION: ap-south-1
+  WORKER_RUNTIME_CLASS: kata-clh
+  WORKER_MEDIA_MODE: gateway-webrtc-relay
+  WORKER_IMAGE_DIGEST: cloudsec-rbi-dev-worker:dev
+  ALLOWED_CANDIDATE_TYPES: relay
+  SWG_EGRESS_PROXY_URL: http://swg-proxy.cloudsec-swg.svc.cluster.local:3128
+  HTTP_PROXY: http://swg-proxy.cloudsec-swg.svc.cluster.local:3128
+  HTTPS_PROXY: http://swg-proxy.cloudsec-swg.svc.cluster.local:3128
+  ALL_PROXY: http://swg-proxy.cloudsec-swg.svc.cluster.local:3128
+  NO_PROXY: "localhost,127.0.0.1,::1,.svc,.svc.cluster.local,kubernetes.default.svc,runtime.cloudsec-rbi-control.svc.cluster.local,media-gateway.cloudsec-rbi-media.svc.cluster.local,turn.cloudsec-rbi-media.svc.cluster.local"
+  http_proxy: http://swg-proxy.cloudsec-swg.svc.cluster.local:3128
+  https_proxy: http://swg-proxy.cloudsec-swg.svc.cluster.local:3128
+  all_proxy: http://swg-proxy.cloudsec-swg.svc.cluster.local:3128
+  no_proxy: "localhost,127.0.0.1,::1,.svc,.svc.cluster.local,kubernetes.default.svc,runtime.cloudsec-rbi-control.svc.cluster.local,media-gateway.cloudsec-rbi-media.svc.cluster.local,turn.cloudsec-rbi-media.svc.cluster.local"
+  DISPLAY_WIDTH: "1920"
+  DISPLAY_HEIGHT: "1080"
+  CAPTURE_FRAMERATE: "20"
+  VIDEO_CODEC_PREFERENCES: VP8
+  VIDEO_MIN_BITRATE_BPS: "600000"
+  VIDEO_START_BITRATE_BPS: "1500000"
+  VIDEO_MAX_BITRATE_BPS: "3000000"
+  HOME: /home/rbi

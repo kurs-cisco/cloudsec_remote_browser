@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cloudsec-rbi-workers
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/name: cloudsec-remote-browser
+    app.kubernetes.io/component: rbi-worker-egress-proof
+    cloudsec.cisco.com/rbi-plane: worker
+configMapGenerator:
+  - name: rbi-worker-egress-proof-script
+    files:
+      - rbi_worker_egress_proof.py=scripts/rbi_worker_egress_proof.py
+resources:
+  - rbi-worker-egress-proof-job.yaml
+images:
+  - name: cloudsec-remote-browser-worker
+    newName: cloudsec-remote-browser-worker
+    newTag: latest

@@ -1,0 +1,18 @@
+# Cross-account SWG roles that may read RBI-owned secret values.
+swg_read_role_arns = [
+  "arn:aws:iam::111122223333:role/swg-prod-rbi-secret-reader",
+]
+
+# Optional RBI KMS administrators.
+kms_admin_principal_arns = [
+  "arn:aws:iam::444455556666:role/rbi-prod-security-admin",
+]
+
+# Optional externally deployed rotation Lambdas. Terraform never supplies secret values.
+rotation_lambda_arns = {
+  session_token_signing = "arn:aws:lambda:us-east-1:444455556666:function:rbi-prod-data-session-token-signing-rotation"
+}
+
+# Optional public endpoint certificate. Leave blank when DNS is managed elsewhere.
+public_certificate_domain_name    = "rbi.example.com"
+public_certificate_hosted_zone_id = "Z00000000000000000000"

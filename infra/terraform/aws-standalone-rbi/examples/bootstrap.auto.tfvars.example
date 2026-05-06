@@ -1,0 +1,12 @@
+project_name = "cloudsec-rbi"
+environment  = "prod"
+aws_region   = "us-east-1"
+
+# Optional. If unset, the state bucket name is derived from project, account, environment, and region.
+# state_bucket_name = "cloudsec-rbi-prod-123456789012-us-east-1-tfstate"
+# lock_table_name   = "cloudsec-rbi-prod-us-east-1-terraform-locks"
+
+tags = {
+  Owner      = "platform"
+  CostCenter = "security"
+}

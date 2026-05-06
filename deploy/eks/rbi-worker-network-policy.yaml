@@ -1,0 +1,90 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: cloudsec-rbi-worker-egress
+  namespace: cloudsec-rbi-workers
+  labels:
+    app.kubernetes.io/name: cloudsec-remote-browser
+    app.kubernetes.io/component: rbi-worker
+    cloudsec.cisco.com/rbi-plane: worker
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              cloudsec.cisco.com/rbi-plane: control
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              cloudsec.cisco.com/rbi-plane: control
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cloudsec-remote-browser
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 18081
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              cloudsec.cisco.com/rbi-plane: media
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: media-gateway
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 8443
+        - protocol: TCP
+          port: 18082
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              cloudsec.cisco.com/rbi-plane: media
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: turn
+      ports:
+        - protocol: UDP
+          port: 3478
+        - protocol: TCP
+          port: 3478
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 5349
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              cloudsec.cisco.com/egress-plane: swg
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/component: swg-proxy
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 3128

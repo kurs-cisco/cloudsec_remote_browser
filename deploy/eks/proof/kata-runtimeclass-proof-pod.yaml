@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kata-runtimeclass-proof
+  namespace: cloudsec-rbi-kata-proof
+  labels:
+    app.kubernetes.io/name: cloudsec-remote-browser
+    app.kubernetes.io/component: kata-runtime-proof
+    cloudsec.cisco.com/rbi-plane: worker
+spec:
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  hostIPC: false
+  hostNetwork: false
+  hostPID: false
+  restartPolicy: Never
+  runtimeClassName: kata-clh
+  nodeSelector:
+    kubernetes.io/arch: amd64
+    kubernetes.io/os: linux
+    cloudsec.cisco.com/rbi-worker-plane: "true"
+    cloudsec.cisco.com/node-pool: "rbi-workers"
+  tolerations:
+    - key: cloudsec.cisco.com/rbi-worker-plane
+      operator: Equal
+      value: "true"
+      effect: NoSchedule
+  securityContext:
+    fsGroup: 1000
+    fsGroupChangePolicy: OnRootMismatch
+    runAsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: runtime-proof
+      image: public.ecr.aws/amazonlinux/amazonlinux:2023
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -ec
+        - |
+          echo "proof.node=${NODE_NAME}"
+          echo "proof.pod=${POD_NAME}"
+          echo "proof.runtimeClassName=kata-clh"
+          if [ -r /sys/class/dmi/id/product_name ]; then
+            echo "proof.dmi.product=$(cat /sys/class/dmi/id/product_name)"
+          fi
+          if [ -r /proc/1/cgroup ]; then
+            sed -n '1,20p' /proc/1/cgroup
+          fi
+          if [ -c /dev/kvm ]; then
+            echo "proof.error=/dev/kvm is visible inside the worker pod"
+            exit 22
+          fi
+          echo "proof.ok=kata runtimeclass pod scheduled and completed"
+      env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+      resources:
+        requests:
+          cpu: "100m"
+          memory: 128Mi
+        limits:
+          cpu: "500m"
+          memory: 512Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        readOnlyRootFilesystem: true

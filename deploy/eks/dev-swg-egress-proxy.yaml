@@ -1,0 +1,240 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloudsec-swg
+  labels:
+    cloudsec.cisco.com/egress-plane: swg
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swg-proxy-dev
+  namespace: cloudsec-swg
+  labels:
+    app.kubernetes.io/component: swg-proxy
+    app.kubernetes.io/name: cloudsec-rbi-dev-swg-proxy
+data:
+  proxy.py: |
+    import ipaddress
+    import select
+    import socket
+    import socketserver
+    import sys
+    from urllib.parse import urlsplit
+
+    BLOCKED_HOSTS = {"localhost", "metadata.google.internal"}
+    BLOCKED_SUFFIXES = (".svc", ".svc.cluster.local", ".cluster.local")
+    BLOCKED_NETS = [
+        ipaddress.ip_network("0.0.0.0/8"),
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("100.64.0.0/10"),
+        ipaddress.ip_network("127.0.0.0/8"),
+        ipaddress.ip_network("169.254.0.0/16"),
+        ipaddress.ip_network("172.16.0.0/12"),
+        ipaddress.ip_network("192.168.0.0/16"),
+        ipaddress.ip_network("::1/128"),
+        ipaddress.ip_network("fc00::/7"),
+        ipaddress.ip_network("fe80::/10"),
+    ]
+
+    def denied_host(host):
+        value = (host or "").strip().strip("[]").lower()
+        if not value or value in BLOCKED_HOSTS or value.endswith(BLOCKED_SUFFIXES):
+            return True
+        try:
+            ip = ipaddress.ip_address(value)
+            return any(ip in network for network in BLOCKED_NETS)
+        except ValueError:
+            pass
+        try:
+            for _, _, _, _, sockaddr in socket.getaddrinfo(value, None):
+                ip = ipaddress.ip_address(sockaddr[0])
+                if any(ip in network for network in BLOCKED_NETS):
+                    return True
+        except OSError:
+            return True
+        return False
+
+    def relay(left, right):
+        sockets = [left, right]
+        try:
+            while True:
+                readable, _, errored = select.select(sockets, [], sockets, 60)
+                if errored or not readable:
+                    return
+                for source in readable:
+                    data = source.recv(65536)
+                    if not data:
+                        return
+                    target = right if source is left else left
+                    target.sendall(data)
+        finally:
+            for sock in sockets:
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                sock.close()
+
+    class ProxyHandler(socketserver.StreamRequestHandler):
+        timeout = 20
+
+        def send_error(self, code, reason):
+            self.wfile.write(f"HTTP/1.1 {code} {reason}\r\nConnection: close\r\n\r\n".encode("ascii"))
+
+        def read_headers(self):
+            headers = []
+            while True:
+                line = self.rfile.readline(65536)
+                if not line or line in (b"\r\n", b"\n"):
+                    break
+                headers.append(line)
+            return headers
+
+        def connect_upstream(self, host, port):
+            if denied_host(host):
+                raise PermissionError(f"blocked host: {host}")
+            return socket.create_connection((host, int(port)), timeout=20)
+
+        def handle_connect(self, target):
+            if ":" not in target:
+                self.send_error(400, "Bad CONNECT target")
+                return
+            host, port = target.rsplit(":", 1)
+            try:
+                upstream = self.connect_upstream(host, port)
+            except PermissionError:
+                self.send_error(403, "Forbidden")
+                return
+            except OSError:
+                self.send_error(502, "Bad Gateway")
+                return
+            self.wfile.write(b"HTTP/1.1 200 Connection Established\r\nProxy-Agent: cloudsec-rbi-dev-swg\r\n\r\n")
+            relay(self.connection, upstream)
+
+        def handle_http(self, method, target, version, headers):
+            parsed = urlsplit(target)
+            if parsed.scheme not in ("http", "https") or not parsed.hostname:
+                self.send_error(400, "Absolute URL required")
+                return
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            path = parsed.path or "/"
+            if parsed.query:
+                path = f"{path}?{parsed.query}"
+            try:
+                upstream = self.connect_upstream(parsed.hostname, port)
+            except PermissionError:
+                self.send_error(403, "Forbidden")
+                return
+            except OSError:
+                self.send_error(502, "Bad Gateway")
+                return
+            with upstream:
+                upstream.sendall(f"{method} {path} {version}\r\n".encode("ascii", "ignore"))
+                upstream.sendall(f"Host: {parsed.netloc}\r\n".encode("ascii", "ignore"))
+                for header in headers:
+                    lowered = header.lower()
+                    if lowered.startswith((b"proxy-", b"host:", b"connection:")):
+                        continue
+                    upstream.sendall(header)
+                upstream.sendall(b"Connection: close\r\n\r\n")
+                while True:
+                    chunk = upstream.recv(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+
+        def handle(self):
+            request_line = self.rfile.readline(65536).decode("iso-8859-1").strip()
+            if not request_line:
+                return
+            parts = request_line.split()
+            if len(parts) != 3:
+                self.send_error(400, "Bad Request")
+                return
+            method, target, version = parts
+            headers = self.read_headers()
+            if method.upper() == "CONNECT":
+                self.handle_connect(target)
+            else:
+                self.handle_http(method, target, version, headers)
+
+    class ThreadingServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+        allow_reuse_address = True
+        daemon_threads = True
+
+    if __name__ == "__main__":
+        port = int(sys.argv[1]) if len(sys.argv) > 1 else 3128
+        with ThreadingServer(("0.0.0.0", port), ProxyHandler) as server:
+            print(f"cloudsec-rbi dev SWG egress proxy listening on {port}", flush=True)
+            server.serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: swg-proxy
+  namespace: cloudsec-swg
+  labels:
+    app.kubernetes.io/component: swg-proxy
+    app.kubernetes.io/name: cloudsec-rbi-dev-swg-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: swg-proxy
+      app.kubernetes.io/name: cloudsec-rbi-dev-swg-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: swg-proxy
+        app.kubernetes.io/name: cloudsec-rbi-dev-swg-proxy
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: swg-proxy
+          image: 064193375211.dkr.ecr.ap-south-1.amazonaws.com/cloudsec-rbi-dev-worker@sha256:666794a0ea4056ab2c37f16cc7585c9fa60d585e5e39568abe13fe435a726530
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "/opt/swg-proxy/proxy.py", "3128"]
+          ports:
+            - name: proxy
+              containerPort: 3128
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumeMounts:
+            - name: proxy-script
+              mountPath: /opt/swg-proxy
+              readOnly: true
+      volumes:
+        - name: proxy-script
+          configMap:
+            name: swg-proxy-dev
+            defaultMode: 0444
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: swg-proxy
+  namespace: cloudsec-swg
+  labels:
+    app.kubernetes.io/component: swg-proxy
+    app.kubernetes.io/name: cloudsec-rbi-dev-swg-proxy
+spec:
+  selector:
+    app.kubernetes.io/component: swg-proxy
+    app.kubernetes.io/name: cloudsec-rbi-dev-swg-proxy
+  ports:
+    - name: proxy
+      port: 3128
+      targetPort: proxy

@@ -1,0 +1,99 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rbi-worker-egress-proof
+  labels:
+    app.kubernetes.io/name: cloudsec-remote-browser
+    app.kubernetes.io/component: rbi-worker-egress-proof
+    cloudsec.cisco.com/rbi-plane: worker
+spec:
+  backoffLimit: 0
+  completions: 1
+  parallelism: 1
+  activeDeadlineSeconds: 420
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudsec-remote-browser
+        app.kubernetes.io/component: rbi-worker-egress-proof
+        cloudsec.cisco.com/rbi-plane: worker
+        cloudsec.cisco.com/worker-mode: proof
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      hostIPC: false
+      hostNetwork: false
+      hostPID: false
+      restartPolicy: Never
+      runtimeClassName: kata-clh
+      serviceAccountName: rbi-worker
+      terminationGracePeriodSeconds: 10
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/os: linux
+        cloudsec.cisco.com/rbi-worker-plane: "true"
+        cloudsec.cisco.com/node-pool: "rbi-workers"
+      tolerations:
+        - key: cloudsec.cisco.com/rbi-worker-plane
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: egress-proof
+          image: cloudsec-remote-browser-worker:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - python3
+            - -B
+            - /proof/rbi_worker_egress_proof.py
+          envFrom:
+            - configMapRef:
+                name: rbi-worker-shared-config
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: EGRESS_PROOF_PUBLIC_URL
+              value: https://example.com/
+            - name: EGRESS_PROOF_METADATA_URL
+              value: http://169.254.169.254/latest/meta-data/
+            - name: EGRESS_PROOF_KUBE_API_TARGET
+              value: kubernetes.default.svc:443
+            - name: EGRESS_PROOF_REDIS_TARGET
+              value: redis.cloudsec-rbi-control.svc.cluster.local:6379
+            - name: EGRESS_PROOF_PUBLIC_DNS_TARGET
+              value: 8.8.8.8:53
+            - name: EGRESS_PROOF_INTERNAL_TCP_TARGETS
+              value: 10.0.0.1:443,172.16.0.1:443,192.168.0.1:443
+            - name: EGRESS_PROOF_PROXY_DENY_URLS
+              value: http://169.254.169.254/latest/meta-data/,http://10.0.0.1/
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 256Mi
+            limits:
+              cpu: "500m"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: proof-script
+              mountPath: /proof
+              readOnly: true
+      volumes:
+        - name: proof-script
+          configMap:
+            name: rbi-worker-egress-proof-script
+            defaultMode: 0444

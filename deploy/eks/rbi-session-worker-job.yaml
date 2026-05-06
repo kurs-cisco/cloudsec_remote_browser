@@ -1,0 +1,114 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rbi-session-worker-template
+  namespace: cloudsec-rbi-workers
+  labels:
+    app.kubernetes.io/name: cloudsec-remote-browser
+    app.kubernetes.io/component: rbi-session-worker
+    cloudsec.cisco.com/rbi-plane: worker
+spec:
+  suspend: true
+  backoffLimit: 0
+  completions: 1
+  parallelism: 1
+  activeDeadlineSeconds: 7200
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudsec-remote-browser
+        app.kubernetes.io/component: rbi-session-worker
+        cloudsec.cisco.com/rbi-plane: worker
+        cloudsec.cisco.com/worker-mode: session
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      hostIPC: false
+      hostNetwork: false
+      hostPID: false
+      restartPolicy: Never
+      runtimeClassName: kata-clh
+      serviceAccountName: rbi-worker
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/os: linux
+        cloudsec.cisco.com/rbi-worker-plane: "true"
+        cloudsec.cisco.com/node-pool: "rbi-workers"
+      tolerations:
+        - key: cloudsec.cisco.com/rbi-worker-plane
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsNonRoot: true
+        runAsGroup: 1000
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: cloudsec-remote-browser-worker:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: rbi-worker-shared-config
+          env:
+            - name: WORKER_MODE
+              value: session
+            - name: SESSION_ID
+              value: replace-with-session-id
+            - name: TARGET_URL
+              value: https://example.com/
+            - name: WORKER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: rbi-session-worker-secret
+                  key: worker-token
+            - name: TURN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: rbi-session-worker-secret
+                  key: turn-username
+            - name: TURN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: rbi-session-worker-secret
+                  key: turn-password
+          resources:
+            requests:
+              cpu: "1500m"
+              memory: 3Gi
+              ephemeral-storage: 4Gi
+            limits:
+              cpu: "3000m"
+              memory: 6Gi
+              ephemeral-storage: 8Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: dev-shm
+              mountPath: /dev/shm
+            - name: home
+              mountPath: /home/rbi
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+        - name: dev-shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+        - name: home
+          emptyDir:
+            sizeLimit: 6Gi

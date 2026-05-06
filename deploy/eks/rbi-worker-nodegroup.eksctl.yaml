@@ -1,0 +1,27 @@
+# Render this template with render-rbi-worker-launch-template.sh or replace the
+# __...__ placeholders manually before calling eksctl.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: __EKS_CLUSTER_NAME__
+  region: __AWS_REGION__
+
+managedNodeGroups:
+  - name: rbi-workers
+    amiFamily: AmazonLinux2023
+    desiredCapacity: 2
+    minSize: 1
+    maxSize: 10
+    privateNetworking: true
+    updateConfig:
+      maxUnavailable: 1
+    labels:
+      cloudsec.cisco.com/rbi-worker-plane: "true"
+      cloudsec.cisco.com/node-pool: rbi-workers
+    taints:
+      - key: cloudsec.cisco.com/rbi-worker-plane
+        value: "true"
+        effect: NoSchedule
+    launchTemplate:
+      name: __RBI_LAUNCH_TEMPLATE_NAME__
+      version: "__RBI_LAUNCH_TEMPLATE_VERSION__"

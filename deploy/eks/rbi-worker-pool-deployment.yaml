@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rbi-worker-pool-template
+  namespace: cloudsec-rbi-workers
+  labels:
+    app.kubernetes.io/name: cloudsec-remote-browser
+    app.kubernetes.io/component: rbi-worker-pool
+    cloudsec.cisco.com/rbi-plane: worker
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudsec-remote-browser
+      app.kubernetes.io/component: rbi-worker-pool
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudsec-remote-browser
+        app.kubernetes.io/component: rbi-worker-pool
+        cloudsec.cisco.com/rbi-plane: worker
+        cloudsec.cisco.com/worker-mode: pool
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      hostIPC: false
+      hostNetwork: false
+      hostPID: false
+      runtimeClassName: kata-clh
+      serviceAccountName: rbi-worker
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        kubernetes.io/arch: amd64
+        kubernetes.io/os: linux
+        cloudsec.cisco.com/rbi-worker-plane: "true"
+        cloudsec.cisco.com/node-pool: "rbi-workers"
+      tolerations:
+        - key: cloudsec.cisco.com/rbi-worker-plane
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsNonRoot: true
+        runAsGroup: 1000
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: cloudsec-remote-browser-worker:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: rbi-worker-shared-config
+          env:
+            - name: WORKER_MODE
+              value: pool
+            - name: POOL_WORKER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POOL_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: rbi-worker-pool-secret
+                  key: pool-shared-secret
+          resources:
+            requests:
+              cpu: "1500m"
+              memory: 3Gi
+              ephemeral-storage: 4Gi
+            limits:
+              cpu: "3000m"
+              memory: 6Gi
+              ephemeral-storage: 8Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: dev-shm
+              mountPath: /dev/shm
+            - name: home
+              mountPath: /home/rbi
+      volumes:
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+        - name: dev-shm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+        - name: home
+          emptyDir:
+            sizeLimit: 6Gi

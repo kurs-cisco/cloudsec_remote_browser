@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - rbi-worker-namespace.yaml
+  - rbi-worker-serviceaccount.yaml
+  - kata-runtimeclass.yaml
+  - rbi-worker-shared-configmap.yaml
+  - rbi-worker-network-policy.yaml
+  - rbi-worker-pool-deployment.yaml
+  - rbi-session-worker-job.yaml
+images:
+  - name: cloudsec-remote-browser-worker
+    newName: cloudsec-remote-browser-worker
+    newTag: latest

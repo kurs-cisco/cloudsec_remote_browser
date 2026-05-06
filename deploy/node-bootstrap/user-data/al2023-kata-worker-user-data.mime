@@ -1,0 +1,115 @@
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="CLOUDSEC_RBI_KATA_BOUNDARY"
+
+--CLOUDSEC_RBI_KATA_BOUNDARY
+Content-Type: application/node.eks.aws
+
+---
+apiVersion: node.eks.aws/v1alpha1
+kind: NodeConfig
+spec:
+  cluster:
+    name: __EKS_CLUSTER_NAME__
+    apiServerEndpoint: __EKS_API_SERVER_ENDPOINT__
+    certificateAuthority: __EKS_CERTIFICATE_AUTHORITY_B64__
+    cidr: __EKS_SERVICE_IPV4_CIDR__
+  featureGates:
+    InstanceIdNodeName: true
+  kubelet:
+    flags:
+      - --node-labels=__RBI_NODE_LABELS__
+      - --register-with-taints=__RBI_NODE_TAINTS__
+  containerd:
+    config: |
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-clh]
+        runtime_type = "io.containerd.kata-clh.v2"
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+        runtime_type = "io.containerd.kata.v2"
+
+--CLOUDSEC_RBI_KATA_BOUNDARY
+Content-Type: text/x-shellscript; charset="us-ascii"
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+export KATA_RUNTIME_CLASS="${KATA_RUNTIME_CLASS:-kata-clh}"
+export KATA_EXPECTED_RUNTIME_TYPES="${KATA_EXPECTED_RUNTIME_TYPES:-io.containerd.kata-clh.v2 io.containerd.kata.v2}"
+export CLOUDSEC_RBI_NODE_LABELS="${CLOUDSEC_RBI_NODE_LABELS:-__RBI_NODE_LABELS__}"
+export CLOUDSEC_RBI_NODE_TAINTS="${CLOUDSEC_RBI_NODE_TAINTS:-__RBI_NODE_TAINTS__}"
+
+copy_runtime_binary() {
+  local source="$1"
+  local target="$2"
+
+  if [[ "${target}" -ef "${source}" ]]; then
+    chmod 0755 "${target}"
+    return
+  fi
+
+  if [[ -L "${target}" ]]; then
+    rm -f "${target}"
+  fi
+
+  install -m 0755 "${source}" "${target}"
+}
+
+copy_kata_runtime_binaries() {
+  local shim_path=""
+  local clh_path=""
+  local candidate
+
+  for candidate in \
+    /usr/bin/containerd-shim-kata-v2 \
+    /usr/local/bin/containerd-shim-kata-v2 \
+    /opt/kata/bin/containerd-shim-kata-v2 \
+    /usr/bin/containerd-shim-kata-clh-v2 \
+    /usr/local/bin/containerd-shim-kata-clh-v2 \
+    /opt/kata/bin/containerd-shim-kata-clh-v2
+  do
+    if [[ -x "${candidate}" ]]; then
+      shim_path="${candidate}"
+      break
+    fi
+  done
+
+  for candidate in /usr/bin/cloud-hypervisor /usr/local/bin/cloud-hypervisor /opt/kata/bin/cloud-hypervisor; do
+    if [[ -x "${candidate}" ]]; then
+      clh_path="${candidate}"
+      break
+    fi
+  done
+
+  if [[ -n "${shim_path}" ]]; then
+    install -d -m 0755 /usr/local/bin
+    copy_runtime_binary "${shim_path}" /usr/local/bin/containerd-shim-kata-v2
+    copy_runtime_binary "${shim_path}" /usr/local/bin/containerd-shim-kata-clh-v2
+    copy_runtime_binary "${shim_path}" /usr/bin/containerd-shim-kata-v2
+    copy_runtime_binary "${shim_path}" /usr/bin/containerd-shim-kata-clh-v2
+  fi
+
+  if [[ -n "${clh_path}" ]]; then
+    install -d -m 0755 /usr/local/bin
+    copy_runtime_binary "${clh_path}" /usr/local/bin/cloud-hypervisor
+    copy_runtime_binary "${clh_path}" /usr/bin/cloud-hypervisor
+  fi
+}
+
+copy_kata_runtime_binaries
+
+mkdir -p /etc/containerd/conf.d
+cat >/etc/containerd/conf.d/99-cloudsec-rbi-kata-grpc-cri.toml <<'EOF'
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-clh]
+  runtime_type = "io.containerd.kata.v2"
+  privileged_without_host_devices = false
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-clh.options]
+    ConfigPath = "/etc/kata-containers/configuration-clh.toml"
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+  runtime_type = "io.containerd.kata.v2"
+  privileged_without_host_devices = false
+EOF
+systemctl restart containerd || true
+
+bash "__HOST_BOOTSTRAP_SCRIPT_PATH__"
+
+--CLOUDSEC_RBI_KATA_BOUNDARY--

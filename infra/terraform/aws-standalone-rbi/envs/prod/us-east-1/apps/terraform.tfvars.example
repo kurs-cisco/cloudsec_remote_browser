@@ -1,0 +1,65 @@
+aws_region   = "us-east-1"
+environment  = "prod"
+project_name = "cloudsec-standalone-rbi"
+cluster_name = "cloudsec-rbi-prod-us-east-1"
+
+worker_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/cloudsec-remote-browser-worker:prod"
+
+pool_replicas = 2
+
+# Populate these from the sibling network root outputs when the AWS Load Balancer
+# Controller is installed in the cluster.
+control_plane_target_group_arns = {
+  # control-plane = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/example-control/0000000000000000"
+  # media-gateway = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/example-media/1111111111111111"
+}
+
+# bootstrap_target_group_arn = "arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/example-bootstrap/2222222222222222"
+
+worker_shared_config = {
+  POOL_WS_URL             = "wss://media-gateway.example.com/ws/pool"
+  SIGNALING_URL           = "wss://media-gateway.example.com/ws/worker"
+  WORKER_ICE_URLS         = "turn:turn.example.com:3478?transport=udp,turn:turn.example.com:3478?transport=tcp"
+  ALLOWED_CANDIDATE_TYPES = "relay"
+  DISPLAY_WIDTH           = "1280"
+  DISPLAY_HEIGHT          = "720"
+  CAPTURE_FRAMERATE       = "20"
+  VIDEO_CODEC_PREFERENCES = "VP8"
+  VIDEO_MIN_BITRATE_BPS   = "600000"
+  VIDEO_START_BITRATE_BPS = "1500000"
+  VIDEO_MAX_BITRATE_BPS   = "3000000"
+}
+
+# Example Secrets Store CSI hook. Keep secret values out of Terraform; reference
+# existing external secret names or ARNs only.
+# secret_provider_classes = {
+#   rbi-worker-secrets = {
+#     namespace = "cloudsec-rbi-workers"
+#     provider  = "aws"
+#     parameters = {
+#       objects = <<-EOT
+#         - objectName: "arn:aws:secretsmanager:us-east-1:123456789012:secret:rbi-worker-pool"
+#           objectType: "secretsmanager"
+#           jmesPath:
+#             - path: pool-shared-secret
+#               objectAlias: pool-shared-secret
+#       EOT
+#     }
+#     secret_objects = [
+#       {
+#         secret_name = "rbi-worker-pool-secret"
+#         type        = "Opaque"
+#         data = [
+#           {
+#             object_name = "pool-shared-secret"
+#             key         = "pool-shared-secret"
+#           },
+#         ]
+#       },
+#     ]
+#   }
+# }
+
+tags = {
+  Owner = "cloudsec-rbi"
+}

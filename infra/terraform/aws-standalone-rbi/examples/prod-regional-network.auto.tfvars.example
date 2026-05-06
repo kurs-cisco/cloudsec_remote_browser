@@ -1,0 +1,52 @@
+project_name = "cloudsec-rbi"
+environment  = "prod"
+
+# Copy this file to the regional network root you are applying and replace the
+# region-specific values. The Terraform modules are generic; this file is only
+# the per-region input set.
+aws_region         = "us-west-2"
+availability_zones = ["us-west-2a", "us-west-2b", "us-west-2c"]
+
+# Use a CIDR that is unique per RBI region and does not overlap SWG, TGW,
+# inspection, data, or shared-services networks.
+vpc_cidr = "10.82.0.0/16"
+
+public_subnet_cidrs  = ["10.82.0.0/24", "10.82.1.0/24", "10.82.2.0/24"]
+private_subnet_cidrs = ["10.82.16.0/20", "10.82.32.0/20", "10.82.48.0/20"]
+data_subnet_cidrs    = ["10.82.96.0/24", "10.82.97.0/24", "10.82.98.0/24"]
+
+enable_nat_gateway = true
+single_nat_gateway = false
+
+# Use explicit enterprise/SWG edge CIDRs. Leaving these empty creates no public
+# viewer or TURN ingress rules.
+viewer_ingress_cidrs = ["203.0.113.0/24"]
+turn_client_cidrs    = ["203.0.113.0/24"]
+
+# Region-local certificate, endpoint, and TURN values.
+viewer_certificate_arn       = "arn:aws:acm:us-west-2:111122223333:certificate/00000000-0000-0000-0000-000000000000"
+public_endpoint_hostname     = "us-west-2.rbi.example.com"
+turn_hostname                = "turn.us-west-2.rbi.example.com"
+privatelink_private_dns_name = "bootstrap.us-west-2.rbi.internal.example.com"
+
+privatelink_allowed_principals = [
+  "arn:aws:iam::444455556666:root",
+]
+privatelink_acceptance_required = true
+
+# Use a pre-baked TURN AMI for production. Secret access policies are managed
+# outside this module.
+turn_ami_id       = "ami-00000000000000000"
+turn_instance_type = "t3.small"
+turn_min_size      = 2
+turn_desired_capacity = 2
+turn_max_size      = 4
+
+redis_node_type      = "cache.t4g.small"
+redis_node_count     = 2
+redis_engine_version = "7.1"
+
+tags = {
+  Owner      = "platform"
+  CostCenter = "security"
+}

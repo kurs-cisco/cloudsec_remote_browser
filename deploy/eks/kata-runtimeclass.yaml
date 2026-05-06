@@ -1,0 +1,22 @@
+apiVersion: node.k8s.io/v1
+kind: RuntimeClass
+metadata:
+  name: kata-clh
+  labels:
+    app.kubernetes.io/name: cloudsec-remote-browser
+    app.kubernetes.io/component: worker-runtime
+    cloudsec.cisco.com/rbi-plane: worker
+handler: kata-clh
+overhead:
+  podFixed:
+    cpu: "250m"
+    memory: "512Mi"
+scheduling:
+  nodeSelector:
+    cloudsec.cisco.com/rbi-worker-plane: "true"
+    cloudsec.cisco.com/node-pool: "rbi-workers"
+  tolerations:
+    - key: "cloudsec.cisco.com/rbi-worker-plane"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"

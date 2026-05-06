@@ -1,0 +1,35 @@
+project_name = "cloudsec-rbi"
+environment  = "prod"
+aws_region   = "us-east-1"
+
+ecr_repositories = {
+  control-plane = {
+    image_tag_mutability = "IMMUTABLE"
+    max_image_count      = 100
+  }
+  media-gateway = {
+    image_tag_mutability = "IMMUTABLE"
+    max_image_count      = 100
+  }
+  session-authority = {
+    image_tag_mutability = "IMMUTABLE"
+    max_image_count      = 100
+  }
+  worker = {
+    image_tag_mutability = "IMMUTABLE"
+    max_image_count      = 50
+  }
+  file-broker = {
+    image_tag_mutability = "IMMUTABLE"
+    max_image_count      = 50
+  }
+  clipboard-broker = {
+    image_tag_mutability = "IMMUTABLE"
+    max_image_count      = 50
+  }
+}
+
+tags = {
+  Owner      = "platform"
+  CostCenter = "security"
+}

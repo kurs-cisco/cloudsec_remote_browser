@@ -1,0 +1,27 @@
+aws_region   = "us-east-1"
+environment  = "prod"
+project_name = "cloudsec-standalone-rbi"
+cluster_name = "cloudsec-rbi-prod-us-east-1"
+
+cluster_subnet_ids = [
+  "subnet-aaaaaaaaaaaaaaaaa",
+  "subnet-bbbbbbbbbbbbbbbbb",
+]
+
+# Optional. Defaults to cluster_subnet_ids when empty.
+standard_node_subnet_ids = []
+
+# Optional. Defaults to standard_node_subnet_ids or cluster_subnet_ids when empty.
+kata_node_subnet_ids = []
+
+# Custom AL2023 AMI with Kata, Cloud Hypervisor, and
+# /opt/cloudsec/node-bootstrap/bootstrap-kata-worker-host.sh baked in.
+kata_worker_ami_id        = "ami-0123456789abcdef0"
+kata_worker_instance_type = "c5.metal"
+
+standard_node_desired_size = 2
+kata_node_desired_size     = 2
+
+tags = {
+  Owner = "cloudsec-rbi"
+}
