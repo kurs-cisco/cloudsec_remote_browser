@@ -44,7 +44,8 @@ test("windows RDP visual proof redacts token-like URL values in artifacts", asyn
 
   assert.match(source, /__rbiRedactProofValue/);
   assert.match(source, /token\|sig\|signature\|hmac\|secret\|key\|auth\|jwt/);
-  assert.match(source, /href: window\.__rbiRedactProofValue\(location\.href\)/);
+  assert.match(source, /const redactProofValue = window\.__rbiRedactProofValue \|\|/);
+  assert.match(source, /href: redactProofValue\(location\.href\)/);
   assert.match(source, /args:a\.map\(window\.__rbiRedactProofValue\)/);
 });
 

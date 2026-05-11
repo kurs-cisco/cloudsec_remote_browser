@@ -676,8 +676,22 @@ try {
 (async () => {
   const dbg = window.__rbiViewerDebug || {};
   const video = document.querySelector('video');
+  const redactProofValue = window.__rbiRedactProofValue || ((value) => {
+    const s = String(value);
+    try {
+      const u = new URL(s);
+      for (const k of Array.from(u.searchParams.keys())) {
+        if (/token|sig|signature|hmac|secret|key|auth|jwt/i.test(k)) {
+          u.searchParams.set(k, '<redacted>');
+        }
+      }
+      return u.toString();
+    } catch {
+      return s.replace(/([?&][^=]*(?:token|sig|signature|hmac|secret|key|auth|jwt)[^=]*=)[^&\s]+/ig, '$1<redacted>');
+    }
+  });
   const sample = {
-    href: window.__rbiRedactProofValue(location.href),
+    href: redactProofValue(location.href),
     title: document.title,
     readyState: document.readyState,
     timestamp: Date.now(),
