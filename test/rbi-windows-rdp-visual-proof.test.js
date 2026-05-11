@@ -47,3 +47,16 @@ test("windows RDP visual proof redacts token-like URL values in artifacts", asyn
   assert.match(source, /href: window\.__rbiRedactProofValue\(location\.href\)/);
   assert.match(source, /args:a\.map\(window\.__rbiRedactProofValue\)/);
 });
+
+test("windows RDP visual proof redacts requested URL before persistence and stdout", async () => {
+  const source = await loadProofHarness();
+
+  assert.match(source, /function Redact-ProofValue/);
+  assert.match(source, /url = Redact-ProofValue \$Config\.Url/);
+  assert.match(source, /artifact_config\["Url"\] = redact_proof_value\(config\["Url"\]\)/);
+  assert.match(source, /\$RuntimeConfigPath = Join-Path \$BaseDir "\$\(.*RunId.*\)-runtime-config\.json"/);
+  assert.match(source, /Set-Content -LiteralPath \$ConfigPath -Encoding UTF8/);
+  assert.match(source, /printf 'Proof URL: %s\\n' "\$\{PROOF_URL_REDACTED\}"/);
+  assert.match(source, /INVOCATION_REDACTED="\$\(redact_proof_value <<<"\$\{INVOCATION\}"\)"/);
+  assert.match(source, /printf '%s\\n' "\$\{INVOCATION_REDACTED\}"/);
+});

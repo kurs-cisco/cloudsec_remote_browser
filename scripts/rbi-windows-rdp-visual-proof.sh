@@ -80,6 +80,13 @@ require_cmd() {
   done
 }
 
+redact_proof_value() {
+  python3 -c 'import re, sys
+value = sys.stdin.read()
+pattern = re.compile(r"([?&][^=&#\s]*(?:token|sig|signature|hmac|secret|key|auth|jwt)[^=&#\s]*=)[^&#\s]+", re.I)
+sys.stdout.write(pattern.sub(r"\1<redacted>", value))'
+}
+
 resolve_config_file() {
   local candidate="$1"
   local workspace_root
@@ -217,6 +224,7 @@ require_cmd aws python3
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/rbi-windows-rdp-proof.XXXXXX")"
 trap 'rm -rf "${TMP_DIR}"' EXIT
 PAYLOAD="${TMP_DIR}/ssm-payload.json"
+PROOF_URL_REDACTED="$(redact_proof_value <<<"${PROOF_URL}")"
 
 export RBI_WINDOWS_PAYLOAD_PATH="${PAYLOAD}"
 export RBI_WINDOWS_PROOF_URL_EFFECTIVE="${PROOF_URL}"
@@ -240,13 +248,28 @@ python3 <<'PY'
 import base64
 import json
 import os
+import re
 from pathlib import Path
+
+TOKEN_LIKE_QUERY_VALUE = re.compile(
+    r"([?&][^=&#\s]*(?:token|sig|signature|hmac|secret|key|auth|jwt)[^=&#\s]*=)[^&#\s]+",
+    re.I,
+)
+
+
+def redact_proof_value(value):
+    return TOKEN_LIKE_QUERY_VALUE.sub(r"\1<redacted>", str(value))
 
 runner = r'''
 param([Parameter(Mandatory=$true)][string]$ConfigPath)
 
 $ErrorActionPreference = "Stop"
 $Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+try {
+  if ($ConfigPath -like "*-runtime-config.json") {
+    Remove-Item -LiteralPath $ConfigPath -Force -ErrorAction SilentlyContinue
+  }
+} catch {}
 $RunRoot = Join-Path $Config.ArtifactRoot $Config.RunId
 $SummaryPath = Join-Path $RunRoot "summary.json"
 $ConsoleEvents = New-Object System.Collections.ArrayList
@@ -265,6 +288,17 @@ function Write-JsonFile {
   $Value | ConvertTo-Json -Depth 64 | Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
+function Redact-ProofValue {
+  param([AllowNull()]$Value)
+  if ($null -eq $Value) { return $null }
+  return [regex]::Replace(
+    [string]$Value,
+    '([?&][^=&#\s]*(?:token|sig|signature|hmac|secret|key|auth|jwt)[^=&#\s]*=)[^&#\s]+',
+    '$1<redacted>',
+    [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+  )
+}
+
 function Complete-Proof {
   param([string]$Status, [string]$Reason)
   $artifacts = @{}
@@ -278,9 +312,9 @@ function Complete-Proof {
   }
   $summary = [ordered]@{
     status = $Status
-    reason = $Reason
+    reason = Redact-ProofValue $Reason
     runId = $Config.RunId
-    url = $Config.Url
+    url = Redact-ProofValue $Config.Url
     user = [Environment]::UserName
     machine = [Environment]::MachineName
     artifactRoot = $RunRoot
@@ -905,21 +939,28 @@ config = {
 }
 runner_b64 = base64.b64encode(runner.encode("utf-16le")).decode("ascii")
 config_json = json.dumps(config, separators=(",", ":"))
+artifact_config = dict(config)
+artifact_config["Url"] = redact_proof_value(config["Url"])
+artifact_config_json = json.dumps(artifact_config, separators=(",", ":"))
 config_b64 = base64.b64encode(config_json.encode("utf-8")).decode("ascii")
+artifact_config_b64 = base64.b64encode(artifact_config_json.encode("utf-8")).decode("ascii")
 
 bootstrap = rf'''
 $ErrorActionPreference = "Stop"
 $ConfigJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("{config_b64}"))
 $Config = $ConfigJson | ConvertFrom-Json
+$ArtifactConfigJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String("{artifact_config_b64}"))
+$ArtifactConfig = $ArtifactConfigJson | ConvertFrom-Json
 $BaseDir = Join-Path $Config.ArtifactRoot "_harness"
 $RunRoot = Join-Path $Config.ArtifactRoot $Config.RunId
 New-Item -ItemType Directory -Force -Path $BaseDir | Out-Null
 New-Item -ItemType Directory -Force -Path $RunRoot | Out-Null
 $RunnerPath = Join-Path $BaseDir "rbi-current-rdp-visual-proof.ps1"
+$RuntimeConfigPath = Join-Path $BaseDir "$($Config.RunId)-runtime-config.json"
 $ConfigPath = Join-Path $RunRoot "config.json"
 $SummaryPath = Join-Path $RunRoot "summary.json"
 [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String("{runner_b64}")) | Set-Content -LiteralPath $RunnerPath -Encoding Unicode
-$Config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $ConfigPath -Encoding UTF8
+$ArtifactConfig | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $ConfigPath -Encoding UTF8
 
 function Get-ActiveRdpUser {{
   $lines = quser 2>$null
@@ -940,7 +981,8 @@ $User = [string]$Config.RdpUser
 if (-not $User) {{ $User = Get-ActiveRdpUser }}
 if (-not $User) {{ throw "no active RDP user found; open an interactive RDP session or pass --rdp-user" }}
 
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$RunnerPath`" -ConfigPath `"$ConfigPath`""
+$Config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $RuntimeConfigPath -Encoding UTF8
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$RunnerPath`" -ConfigPath `"$RuntimeConfigPath`""
 $Principal = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel Highest
 $Task = New-ScheduledTask -Action $Action -Principal $Principal
 Register-ScheduledTask -TaskName $Config.TaskName -InputObject $Task -Force | Out-Null
@@ -953,10 +995,12 @@ do {{
 }} while ((Get-Date) -lt $Deadline)
 
 if (-not (Test-Path -LiteralPath $SummaryPath)) {{
+  Remove-Item -LiteralPath $RuntimeConfigPath -Force -ErrorAction SilentlyContinue
   throw "interactive scheduled task did not produce summary before timeout; RDP may be locked, disconnected, or task principal may be invalid"
 }}
 
 $Summary = Get-Content -LiteralPath $SummaryPath -Raw | ConvertFrom-Json
+Remove-Item -LiteralPath $RuntimeConfigPath -Force -ErrorAction SilentlyContinue
 if ($Config.S3Uri) {{
   $Aws = Get-Command aws.exe -ErrorAction SilentlyContinue
   if (-not $Aws) {{ $Aws = Get-Command aws -ErrorAction SilentlyContinue }}
@@ -986,7 +1030,7 @@ printf 'Config: %s\n' "${CONFIG_FILE}"
 printf 'AWS profile: %s\n' "${AWS_PROFILE:-<unset>}"
 printf 'AWS region: %s\n' "${AWS_REGION}"
 printf 'Windows instance: %s\n' "${INSTANCE_ID}"
-printf 'Proof URL: %s\n' "${PROOF_URL}"
+printf 'Proof URL: %s\n' "${PROOF_URL_REDACTED}"
 printf 'Run ID: %s\n' "${RUN_ID}"
 if [[ -n "${S3_URI}" ]]; then
   printf 'Artifact S3 prefix: %s/%s/\n' "${S3_URI%/}" "${RUN_ID}"
@@ -1019,7 +1063,8 @@ INVOCATION="$(
     --output json
 )"
 
-printf '%s\n' "${INVOCATION}"
+INVOCATION_REDACTED="$(redact_proof_value <<<"${INVOCATION}")"
+printf '%s\n' "${INVOCATION_REDACTED}"
 
 INVOCATION_STATUS="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("Status",""))' <<<"${INVOCATION}")"
 if [[ "${WAIT_STATUS}" -ne 0 || "${INVOCATION_STATUS}" != "Success" ]]; then
