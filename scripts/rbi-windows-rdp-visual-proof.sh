@@ -440,25 +440,121 @@ function Get-ObjectProperty($Object, [string]$Name) {
   return $null
 }
 
-function Invoke-ProofInput {
-  $point = Evaluate-Cdp -AwaitPromise -Expression @"
-(async () => {
+function Get-ProofInputReadiness {
+  return Evaluate-Cdp -AwaitPromise -Expression @"
+(() => {
+  const dbg = window.__rbiViewerDebug || {};
+  const channels = dbg.inputChannels || {};
   const video = document.querySelector('video');
-  if (!video) return null;
-  video.focus();
-  const rect = video.getBoundingClientRect();
-  if (!rect || rect.width < 20 || rect.height < 20) return null;
+  const rect = video ? video.getBoundingClientRect() : null;
+  const isOpen = (channel) => Boolean(channel && channel.readyState === 'open');
+  const hasInputChannel = isOpen(channels.control) || isOpen(channels.legacy);
+  const hasVideo = Boolean(
+    video &&
+    rect &&
+    rect.width >= 20 &&
+    rect.height >= 20 &&
+    video.videoWidth > 0 &&
+    video.videoHeight > 0 &&
+    video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+  );
+  const slo = dbg.inputSloWindow || {};
+  const inputStats = dbg.inputAckStats || {};
+  const pending = Number(slo.pending || 0);
+  let reason = '';
+  if (!video) reason = 'missing-video';
+  else if (!hasVideo) reason = 'video-not-decoded';
+  else if (!hasInputChannel) reason = 'input-channel-not-open';
+  else if (pending > 0) reason = 'input-slo-pending';
   return {
-    x: Math.round(rect.left + Math.min(160, Math.max(20, rect.width * 0.35))),
-    y: Math.round(rect.top + Math.min(120, Math.max(20, rect.height * 0.35)))
+    ready: hasVideo && hasInputChannel && pending === 0,
+    reason,
+    x: rect ? Math.round(rect.left + Math.min(160, Math.max(20, rect.width * 0.35))) : 0,
+    y: rect ? Math.round(rect.top + Math.min(120, Math.max(20, rect.height * 0.35))) : 0,
+    sent: Number(inputStats.sent || 0),
+    pending,
+    controlOpen: isOpen(channels.control),
+    legacyOpen: isOpen(channels.legacy)
   };
 })()
 "@
-  if (-not $point) {
-    throw "unable to locate remote video for proof input"
+}
+
+function Send-ProofKey {
+  param([Parameter(Mandatory=$true)][string]$Character)
+
+  $lower = $Character.ToLowerInvariant()
+  $key = $Character
+  $code = ""
+  $vk = 0
+  if ($lower -match '^[a-z]$') {
+    $code = "Key$($lower.ToUpperInvariant())"
+    $vk = [int][char]$lower.ToUpperInvariant()
+  } elseif ($Character -eq "-") {
+    $key = "-"
+    $code = "Minus"
+    $vk = 189
+  } elseif ($Character -match '^[0-9]$') {
+    $code = "Digit$Character"
+    $vk = [int][char]$Character
+  } else {
+    throw "unsupported proof key character: $Character"
   }
-  $x = [double]$point.x
-  $y = [double]$point.y
+
+  [void](Send-Cdp -Method "Input.dispatchKeyEvent" -Params @{
+    type = "keyDown"
+    key = $key
+    code = $code
+    text = $Character
+    unmodifiedText = $Character
+    windowsVirtualKeyCode = $vk
+    nativeVirtualKeyCode = $vk
+  })
+  Start-Sleep -Milliseconds 35
+  [void](Send-Cdp -Method "Input.dispatchKeyEvent" -Params @{
+    type = "keyUp"
+    key = $key
+    code = $code
+    windowsVirtualKeyCode = $vk
+    nativeVirtualKeyCode = $vk
+  })
+}
+
+function Wait-ProofInputAccepted {
+  param([int]$BaselineSent)
+
+  $deadline = (Get-Date).AddSeconds(4)
+  do {
+    $accepted = Evaluate-Cdp -AwaitPromise -Expression @"
+(() => {
+  const dbg = window.__rbiViewerDebug || {};
+  const stats = dbg.inputAckStats || {};
+  const slo = dbg.inputSloWindow || {};
+  return {
+    sent: Number(stats.sent || 0),
+    pending: Number(slo.pending || 0),
+    byClass: slo.byClass || {}
+  };
+})()
+"@
+    if ($accepted -and [int]$accepted.sent -gt $BaselineSent) {
+      return $accepted
+    }
+    Start-Sleep -Milliseconds 150
+  } while ((Get-Date) -lt $deadline)
+
+  throw "proof input events were dispatched but not accepted by the viewer input channel"
+}
+
+function Invoke-ProofInput {
+  param([Parameter(Mandatory=$true)]$Readiness)
+
+  if (-not $Readiness.ready) {
+    throw "viewer input was not ready for proof dispatch: $($Readiness.reason)"
+  }
+  $x = [double]$Readiness.x
+  $y = [double]$Readiness.y
+  [void](Evaluate-Cdp -Expression "document.querySelector('video')?.focus();")
   foreach ($offset in @(0, 6, 12, 18)) {
     [void](Send-Cdp -Method "Input.dispatchMouseEvent" -Params @{ type = "mouseMoved"; x = $x + $offset; y = $y; button = "none" })
     Start-Sleep -Milliseconds 60
@@ -467,8 +563,12 @@ function Invoke-ProofInput {
   Start-Sleep -Milliseconds 80
   [void](Send-Cdp -Method "Input.dispatchMouseEvent" -Params @{ type = "mouseReleased"; x = $x + 18; y = $y; button = "left"; buttons = 0; clickCount = 1 })
   Start-Sleep -Milliseconds 80
-  [void](Send-Cdp -Method "Input.insertText" -Params @{ text = "rbi-proof" })
-  [void]$ConsoleEvents.Add(@{ method = "proof.inputDispatched"; params = @{ x = $x + 18; y = $y; textLength = 9 } })
+  foreach ($character in "rbi-proof".ToCharArray()) {
+    Send-ProofKey -Character ([string]$character)
+    Start-Sleep -Milliseconds 20
+  }
+  $accepted = Wait-ProofInputAccepted -BaselineSent ([int]$Readiness.sent)
+  [void]$ConsoleEvents.Add(@{ method = "proof.inputDispatched"; params = @{ x = $x + 18; y = $y; textLength = 9; sentBefore = [int]$Readiness.sent; sentAfter = [int]$accepted.sent } })
   $script:ProofInputSent = $true
 }
 
@@ -532,7 +632,7 @@ try {
   [void](Send-Cdp -Method "Page.enable")
   [void](Send-Cdp -Method "Runtime.enable")
   [void](Send-Cdp -Method "Log.enable")
-  [void](Evaluate-Cdp -Expression "window.__rbiConsoleEvents=[];['log','warn','error','debug'].forEach(k=>{const o=console[k].bind(console);console[k]=(...a)=>{window.__rbiConsoleEvents.push({level:k,args:a.map(String),ts:Date.now()});o(...a)}});")
+  [void](Evaluate-Cdp -Expression "window.__rbiRedactProofValue=(v)=>{const s=String(v);try{const u=new URL(s);for(const k of Array.from(u.searchParams.keys())){if(/token|sig|signature|hmac|secret|key|auth|jwt/i.test(k)){u.searchParams.set(k,'<redacted>')}}return u.toString()}catch{return s.replace(/([?&][^=]*(?:token|sig|signature|hmac|secret|key|auth|jwt)[^=]*=)[^&\\s]+/ig,'`$1<redacted>')}};window.__rbiConsoleEvents=[];['log','warn','error','debug'].forEach(k=>{const o=console[k].bind(console);console[k]=(...a)=>{window.__rbiConsoleEvents.push({level:k,args:a.map(window.__rbiRedactProofValue),ts:Date.now()});o(...a)}});")
   [void](Send-Cdp -Method "Page.navigate" -Params @{ url = [string]$Config.Url })
 
   Start-Sleep -Seconds 5
@@ -543,7 +643,7 @@ try {
   const dbg = window.__rbiViewerDebug || {};
   const video = document.querySelector('video');
   const sample = {
-    href: location.href,
+    href: window.__rbiRedactProofValue(location.href),
     title: document.title,
     readyState: document.readyState,
     timestamp: Date.now(),
@@ -585,7 +685,12 @@ try {
 	        $sampleHasDecodedFrame = ([int]$sample.video.videoWidth -gt 0 -and [int]$sample.video.videoHeight -gt 0 -and [int]$sample.video.readyState -ge 2)
 	      }
 	      if (-not $script:ProofInputSent -and $sample -and (($sample.stage -and ($sample.stage.stage -eq "first-frame" -or $sample.stage.stage -eq "live")) -or $sampleHasDecodedFrame)) {
-	        Invoke-ProofInput
+	        $readiness = Get-ProofInputReadiness
+	        if ($readiness -and $readiness.ready) {
+	          Invoke-ProofInput -Readiness $readiness
+	        } elseif ($readiness) {
+	          [void]$ConsoleEvents.Add(@{ method = "proof.inputNotReady"; params = $readiness })
+	        }
 	      }
 	      if (-not $script:UsedFfmpeg) {
         $sequencePath = Join-Path $sequenceDir ("frame-{0:D4}.png" -f $ScreenshotSamples.Count)
@@ -603,6 +708,16 @@ try {
     }
     Start-Sleep -Seconds 2
   } while ((Get-Date) -lt $deadline)
+
+  if ($script:ProofInputSent) {
+    Start-Sleep -Seconds 1
+    try {
+      $sample = Evaluate-Cdp -Expression $sampleExpression -AwaitPromise
+      if ($sample) { [void]$WebrtcSamples.Add($sample) }
+    } catch {
+      [void]$ConsoleEvents.Add(@{ method = "proof.finalInputStatsFailed"; params = @{ message = $_.Exception.Message } })
+    }
+  }
 
   try {
     $pageConsole = Evaluate-Cdp -Expression "window.__rbiConsoleEvents || []"
@@ -711,12 +826,14 @@ try {
 	    $maxAckP95 = 0
 	    $maxClickApplyP95 = 0
 	    $hasAckLatency = $false
+	    $interactiveInputClasses = @("pointer_move","pointer_button","wheel","key","text_insert")
 	    foreach ($sample in $WebrtcSamples) {
 	      $slo = Get-ObjectProperty $sample "inputSloWindow"
 	      if (-not $slo) { continue }
 	      $byClass = Get-ObjectProperty $slo "byClass"
 	      if ($byClass) {
 	        foreach ($prop in $byClass.PSObject.Properties) {
+	          if ($interactiveInputClasses -notcontains $prop.Name) { continue }
 	          $ack = Get-ObjectProperty (Get-ObjectProperty $prop.Value "ackMs") "p95"
 	          if ($null -ne $ack -and [double]$ack -gt 0) {
 	            $hasAckLatency = $true

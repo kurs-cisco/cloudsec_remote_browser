@@ -16,7 +16,7 @@ output "secret_metadata" {
       arn          = secret.arn
       name         = secret.name
       kms_key_id   = secret.kms_key_id
-      value_source = "out-of-band"
+      value_source = try(secret.tags["SecretMaterialManagedBy"], "out-of-band")
     }
   }
 }

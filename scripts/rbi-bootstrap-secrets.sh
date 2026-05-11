@@ -46,8 +46,11 @@ Options:
   -h, --help           Show help.
 
 Notes:
-  Terraform creates the secret containers only. This script creates secret
-  versions with AWSCURRENT JSON payloads and top-level kid metadata.
+  Terraform usually creates the secret containers only. This script creates
+  non-Terraform-owned secret versions with AWSCURRENT JSON payloads and
+  top-level kid metadata.
+  swg_handoff_shared_secret is intentionally created by this script, not
+  Terraform, so HMAC material is not stored in Terraform state.
   Secret values are written through temporary files and are never printed.
 EOF
 }
@@ -146,11 +149,6 @@ ROOT_DATA="${RBI_TF_REGIONAL_ROOT:-${TF_ROOT}/envs/prod/us-east-1}/data"
 require_command() {
   command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
 }
-
-require_command aws
-require_command openssl
-require_command date
-require_command mktemp
 
 [[ -n "${AWS_REGION}" ]] || die "AWS_REGION, AWS_DEFAULT_REGION, or RBI_REGION is required"
 
@@ -409,17 +407,8 @@ EOF
     swg_handoff_shared_secret)
       cat > "${payload_file}" <<EOF
 {
-  "schema": "cloudsec-rbi-secret/v1",
   "kid": "$(json_escape "${kid}")",
-  "secret_key": "swg_handoff_shared_secret",
-  "use": "swg-handoff-hmac",
-  "algorithm": "HS256",
-  "hmac_secret": "$(json_escape "${material}")",
-  "audience": "$(json_escape "${audience}")",
-  "environment": "$(json_escape "${TF_VAR_environment:-${RBI_ENVIRONMENT:-}}")",
-  "region": "$(json_escape "${AWS_REGION}")",
-  "created_at": "$(json_escape "${created_at}")",
-  "created_by": "rbi-bootstrap-secrets.sh"
+  "hmac_secret": "$(json_escape "${material}")"
 }
 EOF
       ;;
@@ -468,6 +457,11 @@ put_secret_value() {
 
 validate_secret_selector
 
+require_command aws
+require_command openssl
+require_command date
+require_command mktemp
+
 TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/rbi-bootstrap-secrets.XXXXXX")"
 chmod 700 "${TMP_DIR}"
 trap 'rm -rf "${TMP_DIR}"' EXIT
@@ -485,6 +479,13 @@ missing=0
 
 for key in "${SECRET_KEYS[@]}"; do
   secret_selected "${key}" || continue
+
+  if [[ "${key}" == "swg_handoff_shared_secret" && "${SWG_HANDOFF_TERRAFORM_OWNED:-0}" == "1" ]]; then
+    printf '\nSecret key: %s\n' "${key}"
+    printf 'SKIP %s terraform_managed_version=true\n' "${key}"
+    skipped=$((skipped + 1))
+    continue
+  fi
 
   secret_id="$(resolve_secret_id "${key}")"
   printf '\nSecret key: %s\n' "${key}"

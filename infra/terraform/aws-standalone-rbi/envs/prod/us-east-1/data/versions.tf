@@ -18,3 +18,13 @@ provider "aws" {
     tags = local.provider_tags
   }
 }
+
+provider "aws" {
+  alias   = "swg_credentials"
+  region  = var.swg_credential_secret_region
+  profile = var.swg_credential_secret_aws_profile != "" ? var.swg_credential_secret_aws_profile : null
+
+  default_tags {
+    tags = local.provider_tags
+  }
+}

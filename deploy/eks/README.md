@@ -159,11 +159,14 @@ while `overrideBootstrapCommand` is not supported for AL2023 custom AMIs.
    kubectl apply -f cloudsec_remote_browser/deploy/eks/rbi-worker-namespace.yaml
    ```
 
-7. Replace the placeholder values in `rbi-worker-secrets.example.yaml`, then apply
-   the secrets.
+7. Bootstrap AWS Secrets Manager values with the repo script, then sync the
+   worker Kubernetes secrets from those AWSCURRENT values. Do not edit or apply
+   `rbi-worker-secrets.example.yaml` for production; it is only a local
+   placeholder example.
 
    ```bash
-   kubectl apply -f cloudsec_remote_browser/deploy/eks/rbi-worker-secrets.example.yaml
+   cloudsec_remote_browser/scripts/rbi-bootstrap-secrets.sh --secret swg_handoff_shared_secret
+   cloudsec_remote_browser/scripts/rbi-sync-k8s-secrets.sh
    ```
 
 8. Update `rbi-worker-shared-configmap.yaml` for the real media-gateway, TURN, SWG

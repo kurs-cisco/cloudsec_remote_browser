@@ -23,13 +23,70 @@ variable "kms_admin_principal_arns" {
 }
 
 variable "swg_read_role_arns" {
-  description = "Cross-account SWG role ARNs allowed to read RBI-owned secret values through Secrets Manager and KMS."
+  description = "Cross-account SWG role ARNs allowed through the broad/default RBI secret read path. These roles can read every RBI secret that inherits default read principals."
   type        = list(string)
   default     = []
 }
 
+variable "swg_credential_secret_enabled" {
+  description = "Whether this data root should create the SWG-side credential secret container and read policy."
+  type        = bool
+  default     = false
+}
+
+variable "swg_credential_secret_aws_profile" {
+  description = "Optional AWS CLI profile used by the aliased provider that manages the SWG-side credential secret."
+  type        = string
+  default     = ""
+}
+
+variable "swg_credential_secret_region" {
+  description = "Region for the SWG-side credential secret consumed by proxy pods."
+  type        = string
+  default     = "us-west-2"
+}
+
+variable "swg_credential_secret_name" {
+  description = "Secrets Manager name for the SWG-side credential secret."
+  type        = string
+  default     = ""
+}
+
+variable "swg_credential_secret_kms_key_id" {
+  description = "Optional existing KMS key ID or ARN for the SWG-side credential secret. Leave empty to have Terraform create a customer-managed key with decrypt grants for swg_credential_secret_read_principal_arns."
+  type        = string
+  default     = ""
+}
+
+variable "swg_credential_secret_read_principal_arns" {
+  description = "SWG pod or operator principal ARNs allowed to read the SWG-side credential secret."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for arn in var.swg_credential_secret_read_principal_arns :
+      can(regex("^arn:[^:]+:iam::[0-9]{12}:(role|user)/.+$", arn)) ||
+      can(regex("^arn:[^:]+:iam::[0-9]{12}:root$", arn))
+    ])
+    error_message = "swg_credential_secret_read_principal_arns must contain IAM principal ARNs such as arn:aws:iam::<account-id>:role/<name>, not STS assumed-role session ARNs."
+  }
+}
+
+variable "swg_credential_reader_user_enabled" {
+  description = "Whether to create an RBI-account IAM user with read/decrypt access scoped only to swg_handoff_shared_secret."
+  type        = bool
+  default     = false
+}
+
+variable "swg_credential_reader_user_name" {
+  description = "IAM user name for the Terraform-owned credential principal that can read only the SWG handoff signing secret."
+  type        = string
+  default     = ""
+}
+
 variable "rbi_secret_metadata" {
-  description = "RBI-owned Secrets Manager metadata. Values are intentionally omitted and must be populated outside Terraform."
+  description = "RBI-owned Secrets Manager metadata. Values are generated only for secrets with explicit Terraform-managed version resources."
   type = map(object({
     name                           = optional(string)
     description                    = optional(string)
@@ -77,7 +134,7 @@ variable "rbi_secret_metadata" {
       }
     }
     swg_handoff_shared_secret = {
-      description = "SWG to RBI handoff shared secret metadata placeholder. Populate the value outside Terraform."
+      description = "SWG to RBI handoff shared secret metadata placeholder. Terraform creates the container, access policy, and KMS permissions only; scripts/rbi-bootstrap-secrets.sh owns the AWSCURRENT value."
       tags = {
         RbiUse = "swg-handoff"
       }
