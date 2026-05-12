@@ -11,11 +11,187 @@ import {
   decryptSwgHandoffToken,
   extractSwgHeaders,
   extractSwgHandoffQuery,
+  signSwgHandoffRequest,
   signSwgRequest,
   timingSafeEqualHex,
   verifySwgHandoffRequest,
   verifySwgRequest,
 } from "../shared/swg-handoff.js";
+
+const GOLDEN_SWG_HMAC_SECRET_BASE64 =
+  "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=";
+
+const GOLDEN_SWG_BOOTSTRAP_V1_INPUT = {
+  method: "POST",
+  targetUrl: "https://wikipedia.org/wiki/RBI?source=swg",
+  timestamp: "1778572800123",
+  transactionId: "txn-golden-0001",
+  tenantId: "tenant-golden-11111111-2222-3333-4444-555555555555",
+  profileId: "default_rbi_profile",
+  policy: "isolate-wikipedia",
+  upstreamHost: "wikipedia.org",
+  upstreamScheme: "https",
+  upstreamPort: "443",
+};
+
+const GOLDEN_SWG_BOOTSTRAP_V1_CANONICAL = [
+  "method:POST",
+  "targetUrl:https://wikipedia.org/wiki/RBI?source=swg",
+  "timestamp:1778572800123",
+  "transactionId:txn-golden-0001",
+  "tenantId:tenant-golden-11111111-2222-3333-4444-555555555555",
+  "profileId:default_rbi_profile",
+  "policy:isolate-wikipedia",
+  "upstreamHost:wikipedia.org",
+  "upstreamScheme:https",
+  "upstreamPort:443",
+].join("\n");
+
+const GOLDEN_SWG_BOOTSTRAP_V2_INPUT = {
+  ...GOLDEN_SWG_BOOTSTRAP_V1_INPUT,
+  contractVersion: "v2",
+  requestKind: "https-decrypted-document",
+  originalMethod: "GET",
+  provider: "in_house",
+  providerCategory: "cat-b",
+  fallbackProvider: "fail_closed",
+  fallbackReason: "",
+};
+
+const GOLDEN_SWG_BOOTSTRAP_V2_CANONICAL = [
+  "method:POST",
+  "contractVersion:v2",
+  "requestKind:https-decrypted-document",
+  "originalMethod:GET",
+  "targetUrl:https://wikipedia.org/wiki/RBI?source=swg",
+  "timestamp:1778572800123",
+  "transactionId:txn-golden-0001",
+  "tenantId:tenant-golden-11111111-2222-3333-4444-555555555555",
+  "profileId:default_rbi_profile",
+  "policy:isolate-wikipedia",
+  "provider:in_house",
+  "providerCategory:cat-b",
+  "fallbackProvider:fail_closed",
+  "fallbackReason:",
+  "upstreamHost:wikipedia.org",
+  "upstreamScheme:https",
+  "upstreamPort:443",
+].join("\n");
+
+const GOLDEN_SWG_HANDOFF_INPUT = {
+  method: "GET",
+  sessionId: "sess_golden_0001",
+  targetUrl: GOLDEN_SWG_BOOTSTRAP_V1_INPUT.targetUrl,
+  timestamp: GOLDEN_SWG_BOOTSTRAP_V1_INPUT.timestamp,
+  transactionId: GOLDEN_SWG_BOOTSTRAP_V1_INPUT.transactionId,
+  tenantId: GOLDEN_SWG_BOOTSTRAP_V1_INPUT.tenantId,
+  profileId: GOLDEN_SWG_BOOTSTRAP_V1_INPUT.profileId,
+  policy: GOLDEN_SWG_BOOTSTRAP_V1_INPUT.policy,
+  upstreamHost: GOLDEN_SWG_BOOTSTRAP_V1_INPUT.upstreamHost,
+  upstreamScheme: GOLDEN_SWG_BOOTSTRAP_V1_INPUT.upstreamScheme,
+  upstreamPort: GOLDEN_SWG_BOOTSTRAP_V1_INPUT.upstreamPort,
+};
+
+const GOLDEN_SWG_HANDOFF_CANONICAL = [
+  "method:GET",
+  "sessionId:sess_golden_0001",
+  "targetUrl:https://wikipedia.org/wiki/RBI?source=swg",
+  "timestamp:1778572800123",
+  "transactionId:txn-golden-0001",
+  "tenantId:tenant-golden-11111111-2222-3333-4444-555555555555",
+  "profileId:default_rbi_profile",
+  "policy:isolate-wikipedia",
+  "upstreamHost:wikipedia.org",
+  "upstreamScheme:https",
+  "upstreamPort:443",
+].join("\n");
+
+test("SWG bootstrap v1 HMAC golden vector is stable", () => {
+  const expectedSignature =
+    "a962e520be8e33c27222d6f2c10a6c37eb0ee6012aa36bea6ebf27302f903cc4";
+
+  assert.equal(
+    buildSwgCanonicalString(GOLDEN_SWG_BOOTSTRAP_V1_INPUT),
+    GOLDEN_SWG_BOOTSTRAP_V1_CANONICAL,
+  );
+  assert.equal(
+    signSwgRequest(GOLDEN_SWG_BOOTSTRAP_V1_INPUT, GOLDEN_SWG_HMAC_SECRET_BASE64),
+    expectedSignature,
+  );
+  assert.equal(
+    crypto
+      .createHmac("sha256", Buffer.from(GOLDEN_SWG_HMAC_SECRET_BASE64, "base64"))
+      .update(GOLDEN_SWG_BOOTSTRAP_V1_CANONICAL)
+      .digest("hex"),
+    expectedSignature,
+  );
+  assert.equal(
+    verifySwgRequest(
+      GOLDEN_SWG_BOOTSTRAP_V1_INPUT,
+      GOLDEN_SWG_HMAC_SECRET_BASE64,
+      expectedSignature,
+    ),
+    true,
+  );
+});
+
+test("SWG bootstrap v2 HMAC golden vector is stable", () => {
+  const expectedSignature =
+    "18ccfaf692f6a02c0572ecb1f3caaa4f43a4abcd68ba3e335efb7ee34a029187";
+
+  assert.equal(
+    buildSwgCanonicalString(GOLDEN_SWG_BOOTSTRAP_V2_INPUT),
+    GOLDEN_SWG_BOOTSTRAP_V2_CANONICAL,
+  );
+  assert.equal(
+    signSwgRequest(GOLDEN_SWG_BOOTSTRAP_V2_INPUT, GOLDEN_SWG_HMAC_SECRET_BASE64),
+    expectedSignature,
+  );
+  assert.equal(
+    crypto
+      .createHmac("sha256", Buffer.from(GOLDEN_SWG_HMAC_SECRET_BASE64, "base64"))
+      .update(GOLDEN_SWG_BOOTSTRAP_V2_CANONICAL)
+      .digest("hex"),
+    expectedSignature,
+  );
+  assert.equal(
+    verifySwgRequest(
+      GOLDEN_SWG_BOOTSTRAP_V2_INPUT,
+      GOLDEN_SWG_HMAC_SECRET_BASE64,
+      expectedSignature,
+    ),
+    true,
+  );
+});
+
+test("SWG legacy handoff HMAC golden vector is stable", () => {
+  const expectedSignature =
+    "17d55b2e66fd226adc78ad563e45c8ad6c5d2b196b5422668b3d744dcc34e7ea";
+
+  assert.equal(
+    buildSwgHandoffCanonicalString(GOLDEN_SWG_HANDOFF_INPUT),
+    GOLDEN_SWG_HANDOFF_CANONICAL,
+  );
+  assert.equal(
+    signSwgHandoffRequest(GOLDEN_SWG_HANDOFF_INPUT, GOLDEN_SWG_HMAC_SECRET_BASE64),
+    expectedSignature,
+  );
+  assert.equal(
+    crypto
+      .createHmac("sha256", Buffer.from(GOLDEN_SWG_HMAC_SECRET_BASE64, "base64"))
+      .update(GOLDEN_SWG_HANDOFF_CANONICAL)
+      .digest("hex"),
+    expectedSignature,
+  );
+  assert.equal(
+    verifySwgHandoffRequest(
+      GOLDEN_SWG_HANDOFF_INPUT,
+      GOLDEN_SWG_HMAC_SECRET_BASE64,
+      expectedSignature,
+    ),
+    true,
+  );
+});
 
 test("SWG handoff signature verifies for canonical request", () => {
   const secret = "local-swg-shared-secret";

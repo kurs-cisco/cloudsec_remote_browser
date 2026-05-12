@@ -57,6 +57,100 @@ Signature:
 hex(hmac_sha256(SWG_SHARED_SECRET, canonical_string))
 ```
 
+## Golden HMAC Test Vectors
+
+These vectors use a public dummy key and are safe to commit. They are the
+release-gate contract for any SWG/Zeus bootstrap signer or verifier. Any change
+to canonical field order, newline placement, key decoding, or HMAC algorithm
+must update this document and the authoritative unit test
+`test/swg-handoff.test.js`.
+
+Public test secret, base64-encoded 32-byte key material:
+
+```text
+AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+```
+
+Bootstrap v1 canonical string:
+
+```text
+method:POST
+targetUrl:https://wikipedia.org/wiki/RBI?source=swg
+timestamp:1778572800123
+transactionId:txn-golden-0001
+tenantId:tenant-golden-11111111-2222-3333-4444-555555555555
+profileId:default_rbi_profile
+policy:isolate-wikipedia
+upstreamHost:wikipedia.org
+upstreamScheme:https
+upstreamPort:443
+```
+
+Expected bootstrap v1 HMAC-SHA256 hex:
+
+```text
+a962e520be8e33c27222d6f2c10a6c37eb0ee6012aa36bea6ebf27302f903cc4
+```
+
+Bootstrap v2 canonical string:
+
+```text
+method:POST
+contractVersion:v2
+requestKind:https-decrypted-document
+originalMethod:GET
+targetUrl:https://wikipedia.org/wiki/RBI?source=swg
+timestamp:1778572800123
+transactionId:txn-golden-0001
+tenantId:tenant-golden-11111111-2222-3333-4444-555555555555
+profileId:default_rbi_profile
+policy:isolate-wikipedia
+provider:in_house
+providerCategory:cat-b
+fallbackProvider:fail_closed
+fallbackReason:
+upstreamHost:wikipedia.org
+upstreamScheme:https
+upstreamPort:443
+```
+
+Expected bootstrap v2 HMAC-SHA256 hex:
+
+```text
+18ccfaf692f6a02c0572ecb1f3caaa4f43a4abcd68ba3e335efb7ee34a029187
+```
+
+Legacy signed handoff canonical string:
+
+```text
+method:GET
+sessionId:sess_golden_0001
+targetUrl:https://wikipedia.org/wiki/RBI?source=swg
+timestamp:1778572800123
+transactionId:txn-golden-0001
+tenantId:tenant-golden-11111111-2222-3333-4444-555555555555
+profileId:default_rbi_profile
+policy:isolate-wikipedia
+upstreamHost:wikipedia.org
+upstreamScheme:https
+upstreamPort:443
+```
+
+Expected legacy signed handoff HMAC-SHA256 hex:
+
+```text
+17d55b2e66fd226adc78ad563e45c8ad6c5d2b196b5422668b3d744dcc34e7ea
+```
+
+Release gate:
+
+- `npm run test:unit` in `cloudsec_remote_browser` must pass before changing
+  the SWG contract or signer.
+- Consumer repos that implement the bootstrap signer must carry an equivalent
+  golden-vector test using the values above.
+- Consumer release evidence must link the consumer test result to this contract
+  and must not rely only on live round-trip handoff success.
+
 Response:
 
 ```json
