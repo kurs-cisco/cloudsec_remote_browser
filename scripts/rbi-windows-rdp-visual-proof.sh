@@ -514,6 +514,22 @@ function Get-ProofInputReadiness {
 "@
 }
 
+function Wait-ProofInputReadiness {
+  param([int]$TimeoutSeconds = 8)
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  $last = $null
+  do {
+    $last = Get-ProofInputReadiness
+    if ($last -and $last.ready) {
+      return $last
+    }
+    Start-Sleep -Milliseconds 250
+  } while ((Get-Date) -lt $deadline)
+
+  return $last
+}
+
 function Send-ProofKey {
   param([Parameter(Mandatory=$true)][string]$Character)
 
@@ -590,12 +606,12 @@ function Invoke-ProofInput {
   $y = [double]$Readiness.y
   [void](Evaluate-Cdp -Expression "document.querySelector('video')?.focus();")
   foreach ($offset in @(0, 6, 12, 18)) {
-    [void](Send-Cdp -Method "Input.dispatchMouseEvent" -Params @{ type = "mouseMoved"; x = $x + $offset; y = $y; button = "none" })
+    [void](Send-Cdp -Method "Input.dispatchMouseEvent" -Params @{ type = "mouseMoved"; x = $x + $offset; y = $y; button = "none"; pointerType = "mouse" })
     Start-Sleep -Milliseconds 60
   }
-  [void](Send-Cdp -Method "Input.dispatchMouseEvent" -Params @{ type = "mousePressed"; x = $x + 18; y = $y; button = "left"; buttons = 1; clickCount = 1 })
+  [void](Send-Cdp -Method "Input.dispatchMouseEvent" -Params @{ type = "mousePressed"; x = $x + 18; y = $y; button = "left"; buttons = 1; clickCount = 1; pointerType = "mouse" })
   Start-Sleep -Milliseconds 80
-  [void](Send-Cdp -Method "Input.dispatchMouseEvent" -Params @{ type = "mouseReleased"; x = $x + 18; y = $y; button = "left"; buttons = 0; clickCount = 1 })
+  [void](Send-Cdp -Method "Input.dispatchMouseEvent" -Params @{ type = "mouseReleased"; x = $x + 18; y = $y; button = "left"; buttons = 0; clickCount = 1; pointerType = "mouse" })
   Start-Sleep -Milliseconds 80
   foreach ($character in "rbi-proof".ToCharArray()) {
     Send-ProofKey -Character ([string]$character)
@@ -733,7 +749,7 @@ try {
 	        $sampleHasDecodedFrame = ([int]$sample.video.videoWidth -gt 0 -and [int]$sample.video.videoHeight -gt 0 -and [int]$sample.video.readyState -ge 2)
 	      }
 	      if (-not $script:ProofInputSent -and $sample -and (($sample.stage -and ($sample.stage.stage -eq "first-frame" -or $sample.stage.stage -eq "live")) -or $sampleHasDecodedFrame)) {
-	        $readiness = Get-ProofInputReadiness
+	        $readiness = Wait-ProofInputReadiness
 	        if ($readiness -and $readiness.ready) {
 	          Invoke-ProofInput -Readiness $readiness
 	        } elseif ($readiness) {

@@ -418,9 +418,23 @@ func (s *Service) createBootstrap(ctx context.Context, req contracts.EdgeBootstr
 func (s *Service) validateRequest(req contracts.EdgeBootstrapRequest) (contracts.EdgeBootstrapRequest, error) {
 	req.TransactionID = strings.TrimSpace(req.TransactionID)
 	req.TargetURL = strings.TrimSpace(req.TargetURL)
+	req.OrgID = strings.TrimSpace(req.OrgID)
+	req.BoundaryType = strings.TrimSpace(req.BoundaryType)
+	req.BoundaryID = strings.TrimSpace(req.BoundaryID)
+	req.OriginID = strings.TrimSpace(req.OriginID)
+	req.OriginType = strings.TrimSpace(req.OriginType)
 	req.TenantID = strings.TrimSpace(req.TenantID)
 	req.ProfileID = strings.TrimSpace(req.ProfileID)
 	req.Policy = strings.TrimSpace(req.Policy)
+	req.ContractVersion = strings.TrimSpace(req.ContractVersion)
+	req.RequestKind = strings.TrimSpace(req.RequestKind)
+	req.OriginalMethod = strings.TrimSpace(req.OriginalMethod)
+	req.Provider = strings.TrimSpace(req.Provider)
+	req.ProviderCategory = strings.TrimSpace(req.ProviderCategory)
+	req.FallbackProvider = strings.TrimSpace(req.FallbackProvider)
+	req.FallbackReason = strings.TrimSpace(req.FallbackReason)
+	req.Nonce = strings.TrimSpace(req.Nonce)
+	req.KeyID = strings.TrimSpace(req.KeyID)
 	req.UpstreamHost = strings.TrimSpace(req.UpstreamHost)
 	req.UpstreamScheme = strings.TrimSpace(req.UpstreamScheme)
 	req.UpstreamPort = strings.TrimSpace(req.UpstreamPort)
@@ -432,18 +446,53 @@ func (s *Service) validateRequest(req contracts.EdgeBootstrapRequest) (contracts
 		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "transactionId is required"}
 	case req.TargetURL == "":
 		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "targetUrl is required"}
+	case req.OrgID == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "orgId is required"}
+	case req.BoundaryType == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "boundaryType is required"}
+	case req.BoundaryID == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "boundaryId is required"}
+	case req.OriginID == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "originId is required"}
+	case req.OriginType == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "originType is required"}
 	case req.TenantID == "":
 		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "tenantId is required"}
 	case req.ProfileID == "":
 		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "profileId is required"}
 	case req.Policy == "":
 		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "policy is required"}
+	case req.ContractVersion == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "contractVersion is required"}
+	case req.RequestKind == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "requestKind is required"}
+	case req.OriginalMethod == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "originalMethod is required"}
+	case req.Provider == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "provider is required"}
+	case req.ProviderCategory == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "providerCategory is required"}
+	case req.FallbackProvider == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "fallbackProvider is required"}
+	case req.Nonce == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "nonce is required"}
+	case req.KeyID == "":
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "keyId is required"}
 	case req.UpstreamHost == "":
 		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "upstreamHost is required"}
 	case req.UpstreamScheme == "":
 		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "upstreamScheme is required"}
 	case req.UpstreamPort == "":
 		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusBadRequest, message: "upstreamPort is required"}
+	}
+	if strings.ToLower(req.BoundaryType) != "org" {
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusUnprocessableEntity, message: "boundaryType must be org"}
+	}
+	if req.OrgID != req.BoundaryID {
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusUnprocessableEntity, message: "orgId must match boundaryId"}
+	}
+	if req.TenantID != req.OrgID {
+		return contracts.EdgeBootstrapRequest{}, &apiError{status: http.StatusUnprocessableEntity, message: "tenantId must match orgId"}
 	}
 
 	targetURL, err := url.Parse(req.TargetURL)
@@ -722,9 +771,23 @@ func buildRuntimeSessionRequest(
 	client := cloneMap(req.Client)
 	swg := cloneMap(asMap(client["swg"]))
 	swg["transactionId"] = req.TransactionID
+	swg["orgId"] = req.OrgID
+	swg["boundaryType"] = req.BoundaryType
+	swg["boundaryId"] = req.BoundaryID
+	swg["originId"] = req.OriginID
+	swg["originType"] = req.OriginType
 	swg["tenantId"] = req.TenantID
 	swg["profileId"] = req.ProfileID
 	swg["policy"] = req.Policy
+	swg["contractVersion"] = req.ContractVersion
+	swg["requestKind"] = req.RequestKind
+	swg["originalMethod"] = req.OriginalMethod
+	swg["provider"] = req.Provider
+	swg["providerCategory"] = req.ProviderCategory
+	swg["fallbackProvider"] = req.FallbackProvider
+	swg["fallbackReason"] = req.FallbackReason
+	swg["nonce"] = req.Nonce
+	swg["keyId"] = req.KeyID
 	swg["upstreamHost"] = req.UpstreamHost
 	swg["upstreamScheme"] = req.UpstreamScheme
 	swg["upstreamPort"] = req.UpstreamPort
@@ -732,15 +795,29 @@ func buildRuntimeSessionRequest(
 	client["authMode"] = firstNonEmpty(asString(client["authMode"]), "swg")
 
 	requestContext := map[string]any{
-		"mode":           "swg",
-		"transactionId":  req.TransactionID,
-		"tenantId":       req.TenantID,
-		"profileId":      req.ProfileID,
-		"policy":         req.Policy,
-		"upstreamHost":   req.UpstreamHost,
-		"upstreamScheme": req.UpstreamScheme,
-		"upstreamPort":   req.UpstreamPort,
-		"swg":            swg,
+		"mode":             "swg",
+		"transactionId":    req.TransactionID,
+		"orgId":            req.OrgID,
+		"boundaryType":     req.BoundaryType,
+		"boundaryId":       req.BoundaryID,
+		"originId":         req.OriginID,
+		"originType":       req.OriginType,
+		"tenantId":         req.TenantID,
+		"profileId":        req.ProfileID,
+		"policy":           req.Policy,
+		"contractVersion":  req.ContractVersion,
+		"requestKind":      req.RequestKind,
+		"originalMethod":   req.OriginalMethod,
+		"provider":         req.Provider,
+		"providerCategory": req.ProviderCategory,
+		"fallbackProvider": req.FallbackProvider,
+		"fallbackReason":   req.FallbackReason,
+		"nonce":            req.Nonce,
+		"keyId":            req.KeyID,
+		"upstreamHost":     req.UpstreamHost,
+		"upstreamScheme":   req.UpstreamScheme,
+		"upstreamPort":     req.UpstreamPort,
+		"swg":              swg,
 	}
 	if identity, ok := client["identity"]; ok {
 		requestContext["identity"] = identity

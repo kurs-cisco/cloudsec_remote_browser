@@ -200,6 +200,11 @@ function buildBootstrapHeaders({ targetUrl, transactionId, secret }) {
       targetUrl,
       timestamp: String(Date.now()),
       transactionId,
+      orgId: "tenant-a",
+      boundaryType: "org",
+      boundaryId: "tenant-a",
+      originId: "origin-a",
+      originType: "64",
       tenantId: "tenant-a",
       profileId: "profile-a",
       policy: "policy-a",
@@ -207,6 +212,8 @@ function buildBootstrapHeaders({ targetUrl, transactionId, secret }) {
       providerCategory: "cat-b",
       fallbackProvider: "menlo",
       fallbackReason: "",
+      nonce: `nonce-${transactionId}`,
+      keyId: "key-a",
     },
     secret,
   );
@@ -266,6 +273,81 @@ test("SWG bootstrap is idempotent and viewer events use viewer cookie", async (t
   await waitForServer(publicBaseUrl, child);
 
   const targetUrl = "https://example.com/";
+  const legacyHeaders = {
+    ...buildSwgHeaders(
+      {
+        method: "POST",
+        targetUrl,
+        timestamp: String(Date.now()),
+        transactionId: "tx-missing-provider-envelope",
+        orgId: "tenant-a",
+        boundaryType: "org",
+        boundaryId: "tenant-a",
+        originId: "origin-a",
+        originType: "64",
+        tenantId: "tenant-a",
+        profileId: "profile-a",
+        policy: "policy-a",
+        nonce: "nonce-missing-provider-envelope",
+        keyId: "key-a",
+      },
+      swgSecret,
+    ),
+    "Content-Type": "application/json",
+  };
+  const legacyResponse = await fetch(`${publicBaseUrl}/api/swg/sessions`, {
+    method: "POST",
+    headers: legacyHeaders,
+    body: JSON.stringify({
+      targetUrl,
+      viewport: { width: 1280, height: 720, deviceScaleFactor: 1 },
+      client: { browser: "cloudsec-swg" },
+    }),
+  });
+  assert.equal(legacyResponse.status, 400, logs.join(""));
+  assert.match((await legacyResponse.json()).error, /Missing SWG fields: contractVersion/);
+
+  const tenantMismatchHeaders = {
+    ...buildSwgHeaders(
+      {
+        method: "POST",
+        contractVersion: "v2",
+        requestKind: "http-document",
+        originalMethod: "GET",
+        targetUrl,
+        timestamp: String(Date.now()),
+        transactionId: "tx-tenant-boundary-mismatch",
+        orgId: "tenant-a",
+        boundaryType: "org",
+        boundaryId: "tenant-a",
+        originId: "origin-a",
+        originType: "64",
+        tenantId: "tenant-b",
+        profileId: "profile-a",
+        policy: "policy-a",
+        provider: "in_house",
+        providerCategory: "cat-b",
+        fallbackProvider: "menlo",
+        fallbackReason: "",
+        nonce: "nonce-tenant-boundary-mismatch",
+        keyId: "key-a",
+      },
+      swgSecret,
+    ),
+    "Content-Type": "application/json",
+  };
+  const tenantMismatchResponse = await fetch(`${publicBaseUrl}/api/swg/sessions`, {
+    method: "POST",
+    headers: tenantMismatchHeaders,
+    body: JSON.stringify({
+      targetUrl,
+      viewport: { width: 1280, height: 720, deviceScaleFactor: 1 },
+      client: { browser: "cloudsec-swg" },
+    }),
+  });
+  assert.equal(tenantMismatchResponse.status, 422, logs.join(""));
+  assert.match((await tenantMismatchResponse.json()).error, /tenant boundary mismatch/);
+
   const transactionId = "tx-idem-1";
   const body = {
     targetUrl,

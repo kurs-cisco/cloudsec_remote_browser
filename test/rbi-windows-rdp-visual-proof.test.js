@@ -16,6 +16,8 @@ test("windows RDP visual proof waits for viewer input readiness before dispatch"
   assert.match(source, /function Get-ProofInputReadiness/);
   assert.match(source, /input-channel-not-open/);
   assert.match(source, /input-slo-pending/);
+  assert.match(source, /function Wait-ProofInputReadiness/);
+  assert.match(source, /Wait-ProofInputReadiness/);
   assert.match(source, /Invoke-ProofInput -Readiness \$readiness/);
   assert.match(source, /proof\.inputNotReady/);
 });
@@ -25,6 +27,7 @@ test("windows RDP visual proof types through key events instead of insertText", 
 
   assert.match(source, /function Send-ProofKey/);
   assert.match(source, /Input\.dispatchKeyEvent/);
+  assert.match(source, /pointerType = "mouse"/);
   assert.doesNotMatch(source, /Input\.insertText/);
 });
 

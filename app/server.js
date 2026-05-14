@@ -246,6 +246,18 @@ function normalizeObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function requireOrgBoundaryContext(fields) {
+  if (String(fields.boundaryType || "").trim().toLowerCase() !== "org") {
+    throw httpError(422, "Unsupported SWG boundary type");
+  }
+  if (String(fields.orgId || "") !== String(fields.boundaryId || "")) {
+    throw httpError(422, "SWG org boundary mismatch");
+  }
+  if (String(fields.tenantId || "") !== String(fields.orgId || "")) {
+    throw httpError(422, "SWG tenant boundary mismatch");
+  }
+}
+
 function requireRbiInternalSecret(req) {
   if (!config.rbiInternalSharedSecret) {
     throw httpError(503, "RBI internal secret is not configured");
@@ -1032,9 +1044,23 @@ function buildSessionAuthorityBootstrapRequest(body, targetUrl, swgContext, requ
   return {
     transactionId: swgContext.transactionId,
     targetUrl,
+    orgId: swgContext.orgId,
+    boundaryType: swgContext.boundaryType,
+    boundaryId: swgContext.boundaryId,
+    originId: swgContext.originId,
+    originType: swgContext.originType,
     tenantId: swgContext.tenantId,
     profileId: swgContext.profileId,
     policy: swgContext.policy,
+    contractVersion: swgContext.contractVersion,
+    requestKind: swgContext.requestKind,
+    originalMethod: swgContext.originalMethod,
+    provider: swgContext.provider,
+    providerCategory: swgContext.providerCategory,
+    fallbackProvider: swgContext.fallbackProvider,
+    fallbackReason: swgContext.fallbackReason,
+    nonce: swgContext.nonce,
+    keyId: swgContext.keyId,
     upstreamHost: swgContext.upstreamHost,
     upstreamScheme: swgContext.upstreamScheme,
     upstreamPort: swgContext.upstreamPort,
@@ -1303,10 +1329,24 @@ async function validateSwgBootstrapRequest(req, targetUrl) {
     "signature",
     "timestamp",
     "transactionId",
+    "contractVersion",
+    "requestKind",
+    "originalMethod",
+    "orgId",
+    "boundaryType",
+    "boundaryId",
+    "originId",
+    "originType",
     "tenantId",
     "profileId",
     "policy",
+    "provider",
+    "providerCategory",
+    "fallbackProvider",
+    "nonce",
+    "keyId",
   ]);
+  requireOrgBoundaryContext(headers);
 
   const timestamp = Number(headers.timestamp);
   if (!Number.isFinite(timestamp)) {
@@ -1326,6 +1366,11 @@ async function validateSwgBootstrapRequest(req, targetUrl) {
     targetUrl,
     timestamp: headers.timestamp,
     transactionId: headers.transactionId,
+    orgId: headers.orgId,
+    boundaryType: headers.boundaryType,
+    boundaryId: headers.boundaryId,
+    originId: headers.originId,
+    originType: headers.originType,
     tenantId: headers.tenantId,
     profileId: headers.profileId,
     policy: headers.policy,
@@ -1333,6 +1378,8 @@ async function validateSwgBootstrapRequest(req, targetUrl) {
     providerCategory: envelope.canonicalProviderCategory || envelope.providerCategory,
     fallbackProvider: envelope.canonicalFallbackProvider || envelope.fallbackProvider,
     fallbackReason: envelope.fallbackReason,
+    nonce: headers.nonce,
+    keyId: headers.keyId,
     ...upstream,
   };
 
@@ -1348,11 +1395,18 @@ async function validateSwgBootstrapRequest(req, targetUrl) {
 
   return {
     mode: "swg",
-    identity: `swg:${headers.tenantId}:${headers.profileId}`,
+    identity: `swg:${headers.orgId}:${headers.profileId}`,
     transactionId: headers.transactionId,
+    orgId: headers.orgId,
+    boundaryType: headers.boundaryType,
+    boundaryId: headers.boundaryId,
+    originId: headers.originId,
+    originType: headers.originType,
     tenantId: headers.tenantId,
     profileId: headers.profileId,
     policy: headers.policy,
+    nonce: headers.nonce,
+    keyId: headers.keyId,
     requestFingerprint: fingerprintObject(canonicalInput),
     ...envelope,
     ...upstream,
@@ -1365,10 +1419,24 @@ function buildSwgHandoffUrl(session, swgContext, publicBaseUrl = config.publicBa
     {
       sessionId: session.id,
       targetUrl: session.targetUrl,
+      contractVersion: swgContext.contractVersion,
+      requestKind: swgContext.requestKind,
+      originalMethod: swgContext.originalMethod,
       transactionId: swgContext.transactionId,
+      orgId: swgContext.orgId,
+      boundaryType: swgContext.boundaryType,
+      boundaryId: swgContext.boundaryId,
+      originId: swgContext.originId,
+      originType: swgContext.originType,
       tenantId: swgContext.tenantId,
       profileId: swgContext.profileId,
       policy: swgContext.policy,
+      provider: swgContext.provider,
+      providerCategory: swgContext.providerCategory,
+      fallbackProvider: swgContext.fallbackProvider,
+      fallbackReason: swgContext.fallbackReason,
+      nonce: swgContext.nonce,
+      keyId: swgContext.keyId,
       upstreamHost: swgContext.upstreamHost,
       upstreamScheme: swgContext.upstreamScheme,
       upstreamPort: swgContext.upstreamPort,
@@ -1392,6 +1460,11 @@ function deriveSwgSessionContext(client, targetUrl) {
   return {
     mode: "swg",
     transactionId: swg.transactionId,
+    orgId: swg.orgId || swg.tenantId || "",
+    boundaryType: swg.boundaryType || "",
+    boundaryId: swg.boundaryId || "",
+    originId: swg.originId || "",
+    originType: swg.originType || "",
     tenantId: swg.tenantId,
     profileId: swg.profileId,
     policy: swg.policy,
@@ -1402,6 +1475,8 @@ function deriveSwgSessionContext(client, targetUrl) {
     providerCategory: swg.providerCategory || "",
     fallbackProvider: swg.fallbackProvider || config.rbiFallbackProvider,
     fallbackReason: swg.fallbackReason || "",
+    nonce: swg.nonce || "",
+    keyId: swg.keyId || "",
     ...deriveUpstreamContext(swg, targetUrl),
   };
 }
@@ -1429,9 +1504,22 @@ async function validateSwgHandoffRequest(searchParams, req = null) {
       "transactionId",
       "sessionId",
       "targetUrl",
+      "contractVersion",
+      "requestKind",
+      "originalMethod",
+      "orgId",
+      "boundaryType",
+      "boundaryId",
+      "originId",
+      "originType",
       "tenantId",
       "profileId",
       "policy",
+      "provider",
+      "providerCategory",
+      "fallbackProvider",
+      "nonce",
+      "keyId",
     ]);
   } else {
     requireSwgFields(handoff, [
@@ -1440,11 +1528,25 @@ async function validateSwgHandoffRequest(searchParams, req = null) {
       "transactionId",
       "sessionId",
       "targetUrl",
+      "contractVersion",
+      "requestKind",
+      "originalMethod",
+      "orgId",
+      "boundaryType",
+      "boundaryId",
+      "originId",
+      "originType",
       "tenantId",
       "profileId",
       "policy",
+      "provider",
+      "providerCategory",
+      "fallbackProvider",
+      "nonce",
+      "keyId",
     ]);
   }
+  requireOrgBoundaryContext(handoff);
 
   const session = await sessionStore.get(handoff.sessionId);
   if (!session) {
@@ -1474,7 +1576,29 @@ async function validateSwgHandoffRequest(searchParams, req = null) {
   const upstream = deriveUpstreamContext(handoff, session.targetUrl);
   const storedSwg = deriveSwgSessionContext(session.client, session.targetUrl);
   const mismatches = [];
-  for (const key of ["transactionId", "tenantId", "profileId", "policy", "upstreamHost", "upstreamScheme", "upstreamPort"]) {
+  for (const key of [
+    "transactionId",
+    "orgId",
+    "boundaryType",
+    "boundaryId",
+    "originId",
+    "originType",
+    "tenantId",
+    "profileId",
+    "policy",
+    "contractVersion",
+    "requestKind",
+    "originalMethod",
+    "provider",
+    "providerCategory",
+    "fallbackProvider",
+    "fallbackReason",
+    "nonce",
+    "keyId",
+    "upstreamHost",
+    "upstreamScheme",
+    "upstreamPort",
+  ]) {
     if (String(storedSwg?.[key] || "") !== String((key in upstream ? upstream : handoff)[key] || "")) {
       mismatches.push(key);
     }
@@ -1489,9 +1613,23 @@ async function validateSwgHandoffRequest(searchParams, req = null) {
     targetUrl: session.targetUrl,
     timestamp: handoff.timestamp,
     transactionId: handoff.transactionId,
+    orgId: handoff.orgId,
+    boundaryType: handoff.boundaryType,
+    boundaryId: handoff.boundaryId,
+    originId: handoff.originId,
+    originType: handoff.originType,
     tenantId: handoff.tenantId,
     profileId: handoff.profileId,
     policy: handoff.policy,
+    contractVersion: handoff.contractVersion,
+    requestKind: handoff.requestKind,
+    originalMethod: handoff.originalMethod,
+    provider: handoff.provider,
+    providerCategory: handoff.providerCategory,
+    fallbackProvider: handoff.fallbackProvider,
+    fallbackReason: handoff.fallbackReason,
+    nonce: handoff.nonce,
+    keyId: handoff.keyId,
     ...upstream,
   };
   if (
@@ -1507,7 +1645,7 @@ async function validateSwgHandoffRequest(searchParams, req = null) {
     throw httpError(401, "Invalid SWG handoff signature");
   }
 
-  const replayKey = `handoff:${handoff.sessionId}:${handoff.transactionId}:${handoff.timestamp}`;
+  const replayKey = `handoff:${handoff.sessionId}:${handoff.transactionId}:${handoff.timestamp}:${handoff.nonce}`;
   if (!(await rememberReplay(replayKey))) {
     if (!req || !hasValidViewerCookieForSession(req, session)) {
       throw httpError(409, "Replayed SWG handoff");
@@ -2264,6 +2402,11 @@ const server = http.createServer(async (req, res) => {
           authMode: swgContext.mode,
           swg: {
             transactionId: swgContext.transactionId,
+            orgId: swgContext.orgId,
+            boundaryType: swgContext.boundaryType,
+            boundaryId: swgContext.boundaryId,
+            originId: swgContext.originId,
+            originType: swgContext.originType,
             tenantId: swgContext.tenantId,
             profileId: swgContext.profileId,
             policy: swgContext.policy,
@@ -2274,6 +2417,8 @@ const server = http.createServer(async (req, res) => {
             providerCategory: swgContext.providerCategory,
             fallbackProvider: swgContext.fallbackProvider,
             fallbackReason: swgContext.fallbackReason,
+            nonce: swgContext.nonce,
+            keyId: swgContext.keyId,
             upstreamHost: swgContext.upstreamHost,
             upstreamScheme: swgContext.upstreamScheme,
             upstreamPort: swgContext.upstreamPort,

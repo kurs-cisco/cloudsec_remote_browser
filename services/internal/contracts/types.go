@@ -7,19 +7,33 @@ type Viewport struct {
 }
 
 type EdgeBootstrapRequest struct {
-	TransactionID  string         `json:"transactionId"`
-	TargetURL      string         `json:"targetUrl"`
-	TenantID       string         `json:"tenantId"`
-	ProfileID      string         `json:"profileId"`
-	Policy         string         `json:"policy"`
-	UpstreamHost   string         `json:"upstreamHost"`
-	UpstreamScheme string         `json:"upstreamScheme"`
-	UpstreamPort   string         `json:"upstreamPort"`
-	Viewport       *Viewport      `json:"viewport,omitempty"`
-	Experiments    map[string]any `json:"experiments,omitempty"`
-	Client         map[string]any `json:"client,omitempty"`
-	PublicBaseURL  string         `json:"publicBaseUrl,omitempty"`
-	PublicWsURL    string         `json:"publicWsUrl,omitempty"`
+	TransactionID    string         `json:"transactionId"`
+	TargetURL        string         `json:"targetUrl"`
+	OrgID            string         `json:"orgId"`
+	BoundaryType     string         `json:"boundaryType"`
+	BoundaryID       string         `json:"boundaryId"`
+	OriginID         string         `json:"originId"`
+	OriginType       string         `json:"originType"`
+	TenantID         string         `json:"tenantId"`
+	ProfileID        string         `json:"profileId"`
+	Policy           string         `json:"policy"`
+	ContractVersion  string         `json:"contractVersion,omitempty"`
+	RequestKind      string         `json:"requestKind,omitempty"`
+	OriginalMethod   string         `json:"originalMethod,omitempty"`
+	Provider         string         `json:"provider,omitempty"`
+	ProviderCategory string         `json:"providerCategory,omitempty"`
+	FallbackProvider string         `json:"fallbackProvider,omitempty"`
+	FallbackReason   string         `json:"fallbackReason,omitempty"`
+	Nonce            string         `json:"nonce"`
+	KeyID            string         `json:"keyId"`
+	UpstreamHost     string         `json:"upstreamHost"`
+	UpstreamScheme   string         `json:"upstreamScheme"`
+	UpstreamPort     string         `json:"upstreamPort"`
+	Viewport         *Viewport      `json:"viewport,omitempty"`
+	Experiments      map[string]any `json:"experiments,omitempty"`
+	Client           map[string]any `json:"client,omitempty"`
+	PublicBaseURL    string         `json:"publicBaseUrl,omitempty"`
+	PublicWsURL      string         `json:"publicWsUrl,omitempty"`
 }
 
 type EdgeBootstrapResponse struct {
