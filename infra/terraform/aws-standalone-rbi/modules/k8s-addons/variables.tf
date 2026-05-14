@@ -49,6 +49,18 @@ variable "tolerations" {
   ]
 }
 
+variable "enable_metrics_server" {
+  description = "Install metrics-server so Kubernetes HPA can read CPU and memory resource metrics."
+  type        = bool
+  default     = false
+}
+
+variable "metrics_server_image" {
+  description = "metrics-server image used when enable_metrics_server is true."
+  type        = string
+  default     = "registry.k8s.io/metrics-server/metrics-server:v0.7.2"
+}
+
 variable "labels" {
   description = "Additional labels applied to Kubernetes add-on resources."
   type        = map(string)

@@ -170,6 +170,24 @@ dry-run non-bootstrap roots without remote backend initialization:
 ./scripts/rbi-plan.sh --root global,data,network,eks --local-backend
 ```
 
+### Dev Capacity Profiles
+
+The development config supports cost-aware RBI worker capacity profiles through
+`RBI_CAPACITY_PROFILE`:
+
+- `soak` is the validation profile. It keeps six warm workers, enables the
+  worker HPA, caps the warm pool at twelve workers, and sets
+  `MEDIA_GATEWAY_MAX_ACTIVE_SESSIONS_PER_WORKER=4`.
+- `idle` is the low-cost dev profile. It keeps one warm worker so CPU/memory
+  HPA can function, keeps the same max cap and media-gateway quota, and lets the
+  Spot-backed worker node group shrink when unused.
+
+Use `RBI_CAPACITY_PROFILE=soak` for RDP/SSM/E2E evidence and the 30-minute soak,
+then redeploy the apps root with `RBI_CAPACITY_PROFILE=idle` after evidence is
+captured. The apps root also installs metrics-server when
+`TF_VAR_enable_metrics_server=true`; HPA evidence is valid only after
+`kubectl top pods` and the worker-pool HPA report current metrics.
+
 Destroy intentionally skips the bootstrap state bucket for `--root all`; pass
 `--include-bootstrap` only when you also want to remove the state backend.
 

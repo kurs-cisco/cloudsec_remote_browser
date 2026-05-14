@@ -104,19 +104,22 @@ locals {
       replicas = coalesce(var.media_gateway_replicas, var.control_plane_replicas)
       env = merge(
         {
-          MEDIA_GATEWAY_ADDR                    = ":18082"
-          MEDIA_GATEWAY_REGION                  = var.aws_region
-          MEDIA_GATEWAY_ID                      = "gateway-${var.aws_region}-01"
-          MEDIA_GATEWAY_PUBLIC_BASE_URL         = local.public_base_url
-          MEDIA_GATEWAY_PUBLIC_WS_URL           = "wss://${local.public_endpoint_hostname}/ws"
-          MEDIA_GATEWAY_WORKER_BASE_URL         = "http://media-gateway.${var.control_namespace}.svc.cluster.local:18082"
-          MEDIA_GATEWAY_WORKER_WS_URL           = "ws://media-gateway.${var.control_namespace}.svc.cluster.local:18082"
-          MEDIA_GATEWAY_ICE_URLS                = "stun:${local.worker_turn_hostname}:3478,turn:${local.worker_turn_hostname}:3478?transport=udp,turn:${local.worker_turn_hostname}:3478?transport=tcp"
-          MEDIA_GATEWAY_ENABLE_MEDIA_RELAY      = "true"
-          MEDIA_GATEWAY_DEFAULT_RELAY_MODE      = "gateway-media-relay"
-          MEDIA_GATEWAY_PREFERRED_TRANSPORT     = "webrtc"
-          MEDIA_GATEWAY_SUPPORTED_TRANSPORTS    = "webrtc,websocket"
-          MEDIA_GATEWAY_RUNTIME_NOTIFY_BASE_URL = "http://runtime.${var.control_namespace}.svc.cluster.local:8080"
+          MEDIA_GATEWAY_ADDR                           = ":18082"
+          MEDIA_GATEWAY_REGION                         = var.aws_region
+          MEDIA_GATEWAY_ID                             = "gateway-${var.aws_region}-01"
+          MEDIA_GATEWAY_PUBLIC_BASE_URL                = local.public_base_url
+          MEDIA_GATEWAY_PUBLIC_WS_URL                  = "wss://${local.public_endpoint_hostname}/ws"
+          MEDIA_GATEWAY_WORKER_BASE_URL                = "http://media-gateway.${var.control_namespace}.svc.cluster.local:18082"
+          MEDIA_GATEWAY_WORKER_WS_URL                  = "ws://media-gateway.${var.control_namespace}.svc.cluster.local:18082"
+          MEDIA_GATEWAY_ICE_URLS                       = "stun:${local.worker_turn_hostname}:3478,turn:${local.worker_turn_hostname}:3478?transport=udp,turn:${local.worker_turn_hostname}:3478?transport=tcp"
+          MEDIA_GATEWAY_ENABLE_MEDIA_RELAY             = "true"
+          MEDIA_GATEWAY_DEFAULT_RELAY_MODE             = "gateway-media-relay"
+          MEDIA_GATEWAY_PREFERRED_TRANSPORT            = "webrtc"
+          MEDIA_GATEWAY_SUPPORTED_TRANSPORTS           = "webrtc,websocket"
+          MEDIA_GATEWAY_RUNTIME_NOTIFY_BASE_URL        = "http://runtime.${var.control_namespace}.svc.cluster.local:8080"
+          MEDIA_GATEWAY_MAX_ACTIVE_SESSIONS            = tostring(var.media_gateway_max_active_sessions)
+          MEDIA_GATEWAY_MAX_ACTIVE_SESSIONS_PER_TENANT = tostring(var.media_gateway_max_active_sessions_per_tenant)
+          MEDIA_GATEWAY_MAX_ACTIVE_SESSIONS_PER_WORKER = tostring(var.media_gateway_max_active_sessions_per_worker)
         },
         var.redis_url != "" ? {
           MEDIA_GATEWAY_STATE_BACKEND             = "redis"
@@ -202,9 +205,11 @@ resource "aws_security_group_rule" "cluster_service_ingress" {
 module "k8s_addons" {
   source = "../../../../modules/k8s-addons"
 
-  runtime_class_name = var.runtime_class_name
-  runtime_handler    = "kata-clh"
-  labels             = local.kubernetes_labels
+  runtime_class_name    = var.runtime_class_name
+  runtime_handler       = "kata-clh"
+  enable_metrics_server = var.enable_metrics_server
+  metrics_server_image  = var.metrics_server_image
+  labels                = local.kubernetes_labels
 }
 
 module "rbi_apps" {
@@ -267,10 +272,15 @@ module "rbi_apps" {
     },
     var.worker_shared_config,
   )
-  pool_replicas           = var.pool_replicas
-  target_group_bindings   = merge(local.managed_target_group_bindings, var.target_group_bindings)
-  secret_provider_classes = var.secret_provider_classes
-  labels                  = local.kubernetes_labels
+  pool_replicas                             = var.pool_replicas
+  worker_pool_hpa_enabled                   = var.worker_pool_hpa_enabled
+  worker_pool_hpa_min_replicas              = var.worker_pool_hpa_min_replicas
+  worker_pool_hpa_max_replicas              = var.worker_pool_hpa_max_replicas
+  worker_pool_hpa_cpu_target_utilization    = var.worker_pool_hpa_cpu_target_utilization
+  worker_pool_hpa_memory_target_utilization = var.worker_pool_hpa_memory_target_utilization
+  target_group_bindings                     = merge(local.managed_target_group_bindings, var.target_group_bindings)
+  secret_provider_classes                   = var.secret_provider_classes
+  labels                                    = local.kubernetes_labels
 
   depends_on = [module.k8s_addons]
 }

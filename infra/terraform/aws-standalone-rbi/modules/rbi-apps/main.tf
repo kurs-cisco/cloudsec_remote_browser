@@ -760,6 +760,11 @@ resource "kubernetes_manifest" "worker_network_policy" {
 }
 
 resource "kubernetes_manifest" "worker_pool_deployment" {
+  field_manager {
+    name            = "terraform"
+    force_conflicts = true
+  }
+
   manifest = {
     apiVersion = "apps/v1"
     kind       = "Deployment"
@@ -844,6 +849,89 @@ resource "kubernetes_manifest" "worker_pool_deployment" {
     kubernetes_manifest.worker_shared_config,
     kubernetes_manifest.worker_network_policy,
   ]
+}
+
+resource "kubernetes_manifest" "worker_pool_hpa" {
+  count = var.worker_pool_hpa_enabled ? 1 : 0
+
+  manifest = {
+    apiVersion = "autoscaling/v2"
+    kind       = "HorizontalPodAutoscaler"
+    metadata = {
+      name      = var.pool_deployment_name
+      namespace = var.worker_namespace
+      labels = merge(local.base_labels, {
+        "app.kubernetes.io/component" = "rbi-worker-pool-autoscaler"
+      })
+    }
+    spec = {
+      scaleTargetRef = {
+        apiVersion = "apps/v1"
+        kind       = "Deployment"
+        name       = var.pool_deployment_name
+      }
+      minReplicas = var.worker_pool_hpa_min_replicas
+      maxReplicas = max(var.worker_pool_hpa_min_replicas, var.worker_pool_hpa_max_replicas)
+      metrics = [
+        {
+          type = "Resource"
+          resource = {
+            name = "cpu"
+            target = {
+              type               = "Utilization"
+              averageUtilization = var.worker_pool_hpa_cpu_target_utilization
+            }
+          }
+        },
+        {
+          type = "Resource"
+          resource = {
+            name = "memory"
+            target = {
+              type               = "Utilization"
+              averageUtilization = var.worker_pool_hpa_memory_target_utilization
+            }
+          }
+        },
+      ]
+      behavior = {
+        scaleUp = {
+          stabilizationWindowSeconds = 0
+          policies = [
+            {
+              type          = "Pods"
+              value         = 4
+              periodSeconds = 60
+            },
+            {
+              type          = "Percent"
+              value         = 100
+              periodSeconds = 60
+            },
+          ]
+          selectPolicy = "Max"
+        }
+        scaleDown = {
+          stabilizationWindowSeconds = 300
+          policies = [
+            {
+              type          = "Pods"
+              value         = 2
+              periodSeconds = 60
+            },
+            {
+              type          = "Percent"
+              value         = 50
+              periodSeconds = 60
+            },
+          ]
+          selectPolicy = "Min"
+        }
+      }
+    }
+  }
+
+  depends_on = [kubernetes_manifest.worker_pool_deployment]
 }
 
 resource "terraform_data" "session_worker_job_template_revision" {

@@ -271,6 +271,56 @@ variable "pool_replicas" {
   default     = 0
 }
 
+variable "worker_pool_hpa_enabled" {
+  description = "Create a HorizontalPodAutoscaler for the warm worker pool Deployment."
+  type        = bool
+  default     = false
+}
+
+variable "worker_pool_hpa_min_replicas" {
+  description = "Minimum warm worker pool replicas when HPA is enabled. CPU/memory HPA requires at least one replica."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.worker_pool_hpa_min_replicas >= 1
+    error_message = "worker_pool_hpa_min_replicas must be at least 1 for CPU/memory HPA."
+  }
+}
+
+variable "worker_pool_hpa_max_replicas" {
+  description = "Maximum warm worker pool replicas when HPA is enabled."
+  type        = number
+  default     = 12
+
+  validation {
+    condition     = var.worker_pool_hpa_max_replicas >= 1
+    error_message = "worker_pool_hpa_max_replicas must be at least 1."
+  }
+}
+
+variable "worker_pool_hpa_cpu_target_utilization" {
+  description = "Average CPU utilization percentage target for the warm worker pool HPA."
+  type        = number
+  default     = 65
+
+  validation {
+    condition     = var.worker_pool_hpa_cpu_target_utilization >= 1 && var.worker_pool_hpa_cpu_target_utilization <= 100
+    error_message = "worker_pool_hpa_cpu_target_utilization must be between 1 and 100."
+  }
+}
+
+variable "worker_pool_hpa_memory_target_utilization" {
+  description = "Average memory utilization percentage target for the warm worker pool HPA."
+  type        = number
+  default     = 75
+
+  validation {
+    condition     = var.worker_pool_hpa_memory_target_utilization >= 1 && var.worker_pool_hpa_memory_target_utilization <= 100
+    error_message = "worker_pool_hpa_memory_target_utilization must be between 1 and 100."
+  }
+}
+
 variable "pool_secret_name" {
   description = "Secret containing the pool shared secret."
   type        = string

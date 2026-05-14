@@ -76,6 +76,36 @@ variable "media_gateway_replicas" {
   default     = null
 }
 
+variable "media_gateway_max_active_sessions" {
+  description = "Gateway-wide active session admission quota. Zero disables the gateway-wide quota."
+  type        = number
+  default     = 0
+}
+
+variable "media_gateway_max_active_sessions_per_tenant" {
+  description = "Per-tenant active session admission quota. Zero disables the per-tenant quota."
+  type        = number
+  default     = 0
+}
+
+variable "media_gateway_max_active_sessions_per_worker" {
+  description = "Per-worker active session admission quota enforced by media-gateway."
+  type        = number
+  default     = 4
+}
+
+variable "enable_metrics_server" {
+  description = "Install metrics-server so Kubernetes HPA can read CPU and memory resource metrics."
+  type        = bool
+  default     = true
+}
+
+variable "metrics_server_image" {
+  description = "metrics-server image used when enable_metrics_server is true."
+  type        = string
+  default     = "registry.k8s.io/metrics-server/metrics-server:v0.7.2"
+}
+
 variable "runtime_secret_name" {
   description = "Kubernetes Secret containing runtime TOKEN_SECRET, TURN_SHARED_SECRET, SWG_SHARED_SECRET, RBI_INTERNAL_SHARED_SECRET, and POOL_WORKER_SECRET values."
   type        = string
@@ -222,6 +252,36 @@ variable "pool_replicas" {
   description = "Initial warm-pool Deployment replica count. Defaults to zero for safe apply."
   type        = number
   default     = 0
+}
+
+variable "worker_pool_hpa_enabled" {
+  description = "Create a HorizontalPodAutoscaler for the warm worker pool Deployment."
+  type        = bool
+  default     = true
+}
+
+variable "worker_pool_hpa_min_replicas" {
+  description = "Minimum warm worker pool replicas when HPA is enabled. Use 6 for validation/soak, 1 for low-cost idle."
+  type        = number
+  default     = 1
+}
+
+variable "worker_pool_hpa_max_replicas" {
+  description = "Maximum warm worker pool replicas when HPA is enabled."
+  type        = number
+  default     = 12
+}
+
+variable "worker_pool_hpa_cpu_target_utilization" {
+  description = "Average CPU utilization percentage target for the warm worker pool HPA."
+  type        = number
+  default     = 65
+}
+
+variable "worker_pool_hpa_memory_target_utilization" {
+  description = "Average memory utilization percentage target for the warm worker pool HPA."
+  type        = number
+  default     = 75
 }
 
 variable "tags" {
