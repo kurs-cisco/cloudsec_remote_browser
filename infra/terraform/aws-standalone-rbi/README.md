@@ -103,7 +103,11 @@ and `AWSPREVIOUS` as an optional rotation fallback.
 For the optional SWG-side credential secret, put the underlying IAM role or user
 ARNs in `TF_VAR_swg_credential_secret_read_principal_arns`; do not use the
 `arn:aws:sts::...:assumed-role/...` caller identity returned by
-`sts get-caller-identity`. When `TF_VAR_swg_credential_secret_kms_key_id` is
+`sts get-caller-identity`. This list must include the actual SWG proxy pod
+runtime principal. For EKS deployments that use IRSA, that is the
+`arn:aws:iam::<account>:role/swg-nginx-proxy-https-eks-sa-...` role annotated
+on the service account, not the legacy `MitmdCSCBotRole` fallback. When
+`TF_VAR_swg_credential_secret_kms_key_id` is
 empty, Terraform creates a customer-managed KMS key for that secret and grants
 the same read principals decrypt through Secrets Manager.
 After the Terraform secret containers exist, create the initial

@@ -24,8 +24,11 @@ swg_credential_secret_name          = "rbi/prod/credentials/swg-rbi-secret-reade
 # Leave empty to have Terraform create a customer-managed key for cross-account reads.
 swg_credential_secret_kms_key_id    = ""
 # Use IAM principal ARNs here, not sts get-caller-identity assumed-role ARNs.
+# Include the SWG proxy pod runtime principal, for example the EKS service
+# account role used by swg-nginx-proxy-https in the target dev/prod cluster.
 swg_credential_secret_read_principal_arns = [
   "arn:aws:iam::111122223333:role/swg-prod-proxy-pod-secret-reader",
+  "arn:aws:iam::111122223333:role/swg-nginx-proxy-https-eks-sa-prod-us-east-1-1-0n",
 ]
 swg_credential_reader_user_enabled     = false
 swg_credential_reader_user_name        = "rbi-prod-swg-handoff-secret-reader"
