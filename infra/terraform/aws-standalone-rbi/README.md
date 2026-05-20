@@ -111,6 +111,32 @@ After the Terraform secret containers exist, create the initial
 swg_handoff_shared_secret`. That payload contains exactly `kid` and
 `hmac_secret`; no Terraform state contains the HMAC.
 
+For the SWG-side credential secret, Terraform creates only the secret container,
+resource policy, and KMS policy. A controlled SRE/operator rotation step must
+populate that proxy-account secret with the RBI-account credential-reader IAM
+user credentials:
+
+```json
+{
+  "AccessKeyId": "<RBI reader IAM user access key>",
+  "SecretAccessKey": "<RBI reader IAM user secret key>",
+  "SessionToken": "<optional>"
+}
+```
+
+The credential secret is intentionally proxy/SWG-side only. Do not create a
+same-name credential secret in the RBI account. Before redeploying SWG proxy
+with `RBI_AUTH_SIGN_AWS_CREDENTIAL_SOURCE=aws_secret`, run the non-secret
+preflight:
+
+```sh
+cloudsec_remote_browser/scripts/rbi-validate-swg-secret-access.sh \
+  --config cloudsec_remote_browser/infra/terraform/aws-standalone-rbi/configs/development-ap-south-1.env
+```
+
+The preflight prints only pass/fail metadata. It must not log access keys,
+HMACs, `SecretString` values, or full payloads.
+
 ```sh
 set -a
 source cloudsec_remote_browser/infra/terraform/aws-standalone-rbi/examples/deployment.env.example

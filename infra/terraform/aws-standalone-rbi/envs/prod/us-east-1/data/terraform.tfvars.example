@@ -14,6 +14,10 @@ swg_read_role_arns = [
 # credential secret container and an RBI-account IAM reader principal scoped to
 # swg_handoff_shared_secret. It never creates or stores access-key material in
 # Terraform state.
+# The SWG-side credential secret value is populated by a controlled
+# SRE/operator rotation step with AccessKeyId, SecretAccessKey, and optional
+# SessionToken for the RBI-account IAM reader user. Do not create the same
+# credential secret in the RBI account and do not commit credential values.
 swg_credential_secret_enabled       = false
 swg_credential_secret_region        = "us-west-2"
 swg_credential_secret_name          = "rbi/prod/credentials/swg-rbi-secret-reader"
